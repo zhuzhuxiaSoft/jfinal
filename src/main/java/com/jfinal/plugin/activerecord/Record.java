@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,15 @@
 package com.jfinal.plugin.activerecord;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.Temporal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import com.jfinal.kit.TimeKit;
 import java.util.Map.Entry;
 
 /**
@@ -249,7 +255,40 @@ public class Record implements Serializable {
 	 * Get column of mysql type: date, year
 	 */
 	public java.util.Date getDate(String column) {
-		return (java.util.Date)getColumns().get(column);
+		Object ret = getColumns().get(column);
+		
+		if (ret instanceof Temporal) {
+			if (ret instanceof LocalDateTime) {
+				return TimeKit.toDate((LocalDateTime)ret);
+			}
+			if (ret instanceof LocalDate) {
+				return TimeKit.toDate((LocalDate)ret);
+			}
+			if (ret instanceof LocalTime) {
+				return TimeKit.toDate((LocalTime)ret);
+			}
+		}
+		
+		return (java.util.Date)ret;
+	}
+	
+	public LocalDateTime getLocalDateTime(String column) {
+		Object ret = getColumns().get(column);
+		
+		if (ret instanceof LocalDateTime) {
+			return (LocalDateTime)ret;
+		}
+		if (ret instanceof LocalDate) {
+			return ((LocalDate)ret).atStartOfDay();
+		}
+		if (ret instanceof LocalTime) {
+			return LocalDateTime.of(LocalDate.now(), (LocalTime)ret);
+		}
+		if (ret instanceof java.util.Date) {
+			return TimeKit.toLocalDateTime((java.util.Date)ret);
+		}
+		
+		return (LocalDateTime)ret;
 	}
 	
 	/**
@@ -302,8 +341,15 @@ public class Record implements Serializable {
 	/**
 	 * Get column of mysql type: decimal, numeric
 	 */
-	public java.math.BigDecimal getBigDecimal(String column) {
-		return (java.math.BigDecimal)getColumns().get(column);
+	public BigDecimal getBigDecimal(String column) {
+		Object n = getColumns().get(column);
+		if (n instanceof BigDecimal) {
+			return (BigDecimal)n;
+		} else if (n != null) {
+			return new BigDecimal(n.toString());
+		} else {
+			return null;
+		}
 	}
 	
 	/**

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,22 @@ public class PropKit {
 	private PropKit() {}
 	
 	/**
-	 * Using the properties file. It will loading the properties file if not loading.
+	 * Use the first found properties file
+	 */
+	public static Prop useFirstFound(String... fileNames) {
+		for (String fn : fileNames) {
+			try {
+				return use(fn, Const.DEFAULT_ENCODING);
+			} catch (Exception e) {
+				continue ;
+			}
+		}
+		
+		throw new IllegalArgumentException("没有配置文件可被使用");
+	}
+	
+	/**
+	 * Use the properties file. It will loading the properties file if not loading.
 	 * @see #use(String, String)
 	 */
 	public static Prop use(String fileName) {
@@ -39,7 +54,7 @@ public class PropKit {
 	}
 	
 	/**
-	 * Using the properties file. It will loading the properties file if not loading.
+	 * Use the properties file. It will loading the properties file if not loading.
 	 * <p>
 	 * Example:<br>
 	 * PropKit.use("config.txt", "UTF-8");<br>
@@ -73,7 +88,7 @@ public class PropKit {
 	}
 	
 	/**
-	 * Using the properties file bye File object. It will loading the properties file if not loading.
+	 * Use the properties file bye File object. It will loading the properties file if not loading.
 	 * @see #use(File, String)
 	 */
 	public static Prop use(File file) {
@@ -81,7 +96,7 @@ public class PropKit {
 	}
 	
 	/**
-	 * Using the properties file bye File object. It will loading the properties file if not loading.
+	 * Use the properties file bye File object. It will loading the properties file if not loading.
 	 * <p>
 	 * Example:<br>
 	 * PropKit.use(new File("/var/config/my_config.txt"), "UTF-8");<br>
@@ -203,6 +218,14 @@ public class PropKit {
 	
 	public static Long getLong(String key, Long defaultValue) {
 		return getProp().getLong(key, defaultValue);
+	}
+	
+	public static Double getDouble(String key) {
+		return getProp().getDouble(key);
+	}
+	
+	public static Double getDouble(String key, Double defaultValue) {
+		return getProp().getDouble(key, defaultValue);
 	}
 	
 	public static Boolean getBoolean(String key) {

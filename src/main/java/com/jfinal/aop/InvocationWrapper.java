@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ class InvocationWrapper extends Invocation {
 	
 	/**
 	 * Return the action key.
-	 * actionKey = controllerKey + methodName
+	 * actionKey = controllerPath + methodName
 	 */
 	@Override
 	public String getActionKey() {
@@ -127,11 +127,11 @@ class InvocationWrapper extends Invocation {
 	}
 	
 	/**
-	 * Return the controller key.
+	 * Return the controller path.
 	 */
 	@Override
-	public String getControllerKey() {
-		return invocation.getControllerKey();
+	public String getControllerPath() {
+		return invocation.getControllerPath();
 	}
 	
 	/**

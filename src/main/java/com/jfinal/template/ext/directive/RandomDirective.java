@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package com.jfinal.template.ext.directive;
 
 import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
 import com.jfinal.template.Directive;
 import com.jfinal.template.Env;
 import com.jfinal.template.TemplateException;
@@ -28,11 +29,9 @@ import com.jfinal.template.stat.Scope;
  */
 public class RandomDirective extends Directive {
 	
-	private java.util.Random random = new java.util.Random();
-	
 	public void exec(Env env, Scope scope, Writer writer) {
 		try {
-			writer.write(random.nextInt());
+			writer.write(ThreadLocalRandom.current().nextInt());
 		} catch (IOException e) {
 			throw new TemplateException(e.getMessage(), location, e);
 		}

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ public class TemplateException extends RuntimeException {
 		super(loc != null ? msg + loc : msg);
 	}
 	
-	public TemplateException(String msg, Location loc, Throwable t) {
-		super(loc != null ? msg + loc : msg, t);
+	public TemplateException(String msg, Location loc, Throwable cause) {
+		super(loc != null ? msg + loc : msg, cause);
 	}
 }
 

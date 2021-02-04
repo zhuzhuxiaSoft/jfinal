@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ public class Assign extends Expr {
 	/**
 	 * 获取 assign 表达式左侧标识符 id
 	 * 在自定义指令中得到 id 值，可以得知该赋值表达式是针对哪个变量在操作，有助于扩展
-	 * 需求来源：http://www.jfinal.com/share/379
+	 * 需求来源：https://jfinal.com/share/379
 	 */
 	public String getId() {
 		return id;

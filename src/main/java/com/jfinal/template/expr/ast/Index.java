@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,10 +76,10 @@ public class Index extends Expr {
 		}
 		
 		if (target.getClass().isArray()) {
-			if (idx instanceof Integer) {
-				return java.lang.reflect.Array.get(target, (Integer)idx);
+			if (idx instanceof Number) {
+				return java.lang.reflect.Array.get(target, ((Number)idx).intValue());
 			}
-			throw new TemplateException("The index of array must be integer", location);
+			throw new TemplateException("The index of array must be Number", location);
 		}
 		
 		throw new TemplateException("Only the list array and map is supported by index access", location);

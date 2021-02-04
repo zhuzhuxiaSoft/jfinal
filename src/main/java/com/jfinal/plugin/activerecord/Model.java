@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,23 @@
 package com.jfinal.plugin.activerecord;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Map.Entry;
+import java.util.function.Function;
+import com.jfinal.kit.TimeKit;
 import com.jfinal.plugin.activerecord.cache.ICache;
 import static com.jfinal.plugin.activerecord.DbKit.NULL_PARA_ARRAY;
 
@@ -349,7 +356,40 @@ public abstract class Model<M extends Model> implements Serializable {
 	 * Get attribute of mysql type: date, year
 	 */
 	public java.util.Date getDate(String attr) {
-		return (java.util.Date)attrs.get(attr);
+		Object ret = attrs.get(attr);
+		
+		if (ret instanceof Temporal) {
+			if (ret instanceof LocalDateTime) {
+				return TimeKit.toDate((LocalDateTime)ret);
+			}
+			if (ret instanceof LocalDate) {
+				return TimeKit.toDate((LocalDate)ret);
+			}
+			if (ret instanceof LocalTime) {
+				return TimeKit.toDate((LocalTime)ret);
+			}
+		}
+		
+		return (java.util.Date)ret;
+	}
+	
+	public LocalDateTime getLocalDateTime(String attr) {
+		Object ret = attrs.get(attr);
+		
+		if (ret instanceof LocalDateTime) {
+			return (LocalDateTime)ret;
+		}
+		if (ret instanceof LocalDate) {
+			return ((LocalDate)ret).atStartOfDay();
+		}
+		if (ret instanceof LocalTime) {
+			return LocalDateTime.of(LocalDate.now(), (LocalTime)ret);
+		}
+		if (ret instanceof java.util.Date) {
+			return TimeKit.toLocalDateTime((java.util.Date)ret);
+		}
+		
+		return (LocalDateTime)ret;
 	}
 	
 	/**
@@ -402,8 +442,15 @@ public abstract class Model<M extends Model> implements Serializable {
 	/**
 	 * Get attribute of mysql type: decimal, numeric
 	 */
-	public java.math.BigDecimal getBigDecimal(String attr) {
-		return (java.math.BigDecimal)attrs.get(attr);
+	public BigDecimal getBigDecimal(String attr) {
+		Object n = attrs.get(attr);
+		if (n instanceof BigDecimal) {
+			return (BigDecimal)n;
+		} else if (n != null) {
+			return new BigDecimal(n.toString());
+		} else {
+			return null;
+		}
 	}
 	
 	/**
@@ -671,14 +718,18 @@ public abstract class Model<M extends Model> implements Serializable {
 	
 	/**
 	 * Find model.
+	 * 
+	 * 警告：传入的 Connection 参数需要由传入者在 try finally 块中自行
+	 *      关闭掉，否则将出现 Connection 资源不能及时回收的问题
 	 */
-	private List<M> find(Config config, Connection conn, String sql, Object... paras) throws Exception {
-		PreparedStatement pst = conn.prepareStatement(sql);
-		config.dialect.fillStatement(pst, paras);
-		ResultSet rs = pst.executeQuery();
-		List<M> result = config.dialect.buildModelList(rs, _getUsefulClass());	// ModelBuilder.build(rs, getUsefulClass());
-		DbKit.close(rs, pst);
-		return result;
+	protected List<M> find(Config config, Connection conn, String sql, Object... paras) throws Exception {
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			config.dialect.fillStatement(pst, paras);
+			ResultSet rs = pst.executeQuery();
+			List<M> result = config.dialect.buildModelList(rs, _getUsefulClass());	// ModelBuilder.build(rs, getUsefulClass());
+			DbKit.close(rs);
+			return result;
+		}
 	}
 	
 	protected List<M> find(Config config, String sql, Object... paras) {
@@ -1035,16 +1086,28 @@ public abstract class Model<M extends Model> implements Serializable {
 		return getSqlPara(key, this.attrs);
 	} */
 	
-	public SqlPara getSqlPara(String key, Model model) {
-		return getSqlPara(key, model.attrs);
-	}
-	
 	public SqlPara getSqlPara(String key, Map data) {
 		return _getConfig().getSqlKit().getSqlPara(key, data);
 	}
 	
 	public SqlPara getSqlPara(String key, Object... paras) {
 		return _getConfig().getSqlKit().getSqlPara(key, paras);
+	}
+	
+	public SqlPara getSqlPara(String key, Model model) {
+		return getSqlPara(key, model.attrs);
+	}
+	
+	public SqlPara getSqlParaByString(String content, Map data) {
+		return _getConfig().getSqlKit().getSqlParaByString(content, data);
+	}
+	
+	public SqlPara getSqlParaByString(String content, Object... paras) {
+		return _getConfig().getSqlKit().getSqlParaByString(content, paras);
+	}
+	
+	public SqlPara getSqlParaByString(String content, Model model) {
+		return getSqlParaByString(content, model.attrs);
 	}
 	
 	public List<M> find(SqlPara sqlPara) {
@@ -1058,6 +1121,109 @@ public abstract class Model<M extends Model> implements Serializable {
 	public Page<M> paginate(int pageNumber, int pageSize, SqlPara sqlPara) {
 		String[] sqls = PageSqlKit.parsePageSql(sqlPara.getSql());
 		return doPaginate(pageNumber, pageSize, null, sqls[0], sqls[1], sqlPara.getPara());
+	}
+	
+	public Page<M> paginate(int pageNumber, int pageSize, boolean isGroupBySql, SqlPara sqlPara) {
+		String[] sqls = PageSqlKit.parsePageSql(sqlPara.getSql());
+		return doPaginate(pageNumber, pageSize, isGroupBySql, sqls[0], sqls[1], sqlPara.getPara());
+	}
+	
+	// ---------
+	
+	/**
+	 * 迭代处理每一个查询出来的 Model 对象
+	 * <pre>
+	 * 例子：
+	 * Db.each(model -> {
+	 *    // 处理 model 的代码在此
+	 *    
+	 *    // 返回 true 继续循环处理下一条数据，返回 false 立即终止循环
+	 *    return true;
+	 * }, sql, paras);
+	 * </pre>
+	 */
+	public void each(Function<M, Boolean> func, String sql, Object... paras) {
+		Config config = _getConfig();
+		Connection conn = null;
+		try {
+			conn = config.getConnection();
+			
+			try (PreparedStatement pst = conn.prepareStatement(sql)) {
+				config.dialect.fillStatement(pst, paras);
+				ResultSet rs = pst.executeQuery();
+				config.dialect.eachModel(rs, _getUsefulClass(), func);
+				DbKit.close(rs);
+			}
+			
+		} catch (Exception e) {
+			throw new ActiveRecordException(e);
+		} finally {
+			config.close(conn);
+		}
+	}
+	
+	// ---------
+	
+	/**
+	 * 使用 sql 模板进行查询，可以省去 getSqlPara(...) 调用
+	 * 
+	 * <pre>
+	 * 例子：
+	 * dao.template("blog.find", Kv.by("id", 123)).find();
+	 * </pre>
+	 */
+	public DaoTemplate<M> template(String key, Map data) {
+		return new DaoTemplate(this, key, data);
+	}
+	
+	/**
+	 * 使用 sql 模板进行查询，可以省去 getSqlPara(...) 调用
+	 * 
+	 * <pre>
+	 * 例子：
+	 * dao.template("blog.find", 123).find();
+	 * </pre>
+	 */
+	public DaoTemplate<M> template(String key, Object... paras) {
+		return new DaoTemplate(this, key, paras);
+	}
+	
+	public DaoTemplate<M> template(String key, Model model) {
+		return template(key, model.attrs);
+	}
+	
+	// ---------
+	
+	/**
+	 * 使用字符串变量作为 sql 模板进行查询，可省去外部 sql 文件来使用
+	 * sql 模板功能
+	 * 
+	 * <pre>
+	 * 例子：
+	 * String sql = "select * from blog where id = #para(id)";
+	 * dao.templateByString(sql, Kv.by("id", 123)).find();
+	 * </pre>
+	 */
+	public DaoTemplate<M> templateByString(String content, Map data) {
+		return new DaoTemplate(true, this, content, data);
+	}
+	
+	/**
+	 * 使用字符串变量作为 sql 模板进行查询，可省去外部 sql 文件来使用
+	 * sql 模板功能
+	 * 
+	 * <pre>
+	 * 例子：
+	 * String sql = "select * from blog where id = #para(0)";
+	 * dao.templateByString(sql, 123).find();
+	 * </pre>
+	 */
+	public DaoTemplate<M> templateByString(String content, Object... paras) {
+		return new DaoTemplate(true, this, content, paras);
+	}
+	
+	public DaoTemplate<M> templateByString(String content, Model model) {
+		return templateByString(content, model.attrs);
 	}
 }
 

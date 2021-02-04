@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,11 @@ import java.util.Date;
 /**
  * Writer
  */
-public abstract class Writer {
+public abstract class Writer implements AutoCloseable {
 	
 	protected DateFormats formats = new DateFormats();
 	
 	public abstract void flush() throws IOException;
-	
-	public abstract void close();
 	
 	public abstract void write(IWritable writable) throws IOException;
 	
@@ -57,6 +55,13 @@ public abstract class Writer {
 	public void write(Date date, String datePattern) throws IOException {
 		String str = formats.getDateFormat(datePattern).format(date);
 		write(str, 0, str.length());
+	}
+	
+	/**
+	 * 格式化输出 LocalDateTime、LocalDate、LocalTime
+	 */
+	public void write(java.time.temporal.Temporal temporal, String pattern) throws IOException {
+		write(com.jfinal.kit.TimeKit.getDateTimeFormatter(pattern).format(temporal));
 	}
 }
 

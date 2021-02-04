@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ public abstract class Handler {
 	 * Handle target
 	 * @param target url target of this web http request
 	 * @param request HttpServletRequest of this http request
-	 * @param response HttpServletRequest of this http request
+	 * @param response HttpServletResponse of this http response
 	 * @param isHandled JFinalFilter will invoke doFilter() method if isHandled[0] == false,
 	 * 			it is usually to tell Filter should handle the static resource.
 	 */

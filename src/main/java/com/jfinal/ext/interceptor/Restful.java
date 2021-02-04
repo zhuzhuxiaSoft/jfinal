@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ public class Restful implements Interceptor {
 	 * GET		/user/id		--->	show  
 	 * POST		/user			--->	save	
 	 * PUT		/user/id		--->	update
-	 * DELECT	/user/id		--->	delete
+	 * DELETE	/user/id		--->	delete
 	 */
 	public void intercept(Invocation inv) {
 		// 阻止 JFinal 原有规则 action 请求
@@ -78,29 +78,29 @@ public class Restful implements Interceptor {
 			return ;
 		}
 		
-		String controllerKey = inv.getControllerKey();
+		String controllerPath = inv.getControllerPath();
 		String method = controller.getRequest().getMethod().toUpperCase();
 		String urlPara = controller.getPara();
 		if ("GET".equals(method)) {
 			if (urlPara != null && !"edit".equals(methodName)) {
 				controller.setAttr(isRestfulForwardKey, Boolean.TRUE);
-				controller.forwardAction(controllerKey + "/show/" + urlPara);
+				controller.forwardAction(controllerPath + "/show/" + urlPara);
 				return ;
 			}
 		}
 		else if ("POST".equals(method)) {
 			controller.setAttr(isRestfulForwardKey, Boolean.TRUE);
-			controller.forwardAction(controllerKey + "/save");
+			controller.forwardAction(controllerPath + "/save");
 			return ;
 		}
 		else if ("PUT".equals(method)) {
 			controller.setAttr(isRestfulForwardKey, Boolean.TRUE);
-			controller.forwardAction(controllerKey + "/update/" + urlPara);
+			controller.forwardAction(controllerPath + "/update/" + urlPara);
 			return ;
 		}
 		else if ("DELETE".equals(method)) {
 			controller.setAttr(isRestfulForwardKey, Boolean.TRUE);
-			controller.forwardAction(controllerKey + "/delete/" + urlPara);
+			controller.forwardAction(controllerPath + "/delete/" + urlPara);
 			return ;
 		}
 		

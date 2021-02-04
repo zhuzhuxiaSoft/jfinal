@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,11 @@ import com.jfinal.handler.Handler;
  */
 public class RoutesHandler extends Handler {
 	
-	public void addRoute(String regex, String controllerKey) {
+	public void addRoute(String regex, String controllerPath) {
 		throw new RuntimeException("Not finished");
 	}
 	
-	public void addRoute(String regex, String controllerKey, String method) {
+	public void addRoute(String regex, String controllerPath, String method) {
 		throw new RuntimeException("Not finished");
 	}
 	

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,16 @@ import java.util.Map;
 
 /**
  * DateFormats
+ * 
+ * 备忘：请勿使用 TimeKit.getSimpleDateFormat(String) 优化这里，可减少一次
+ *      ThreadLocal.get() 调用
  */
 public class DateFormats {
 	
-	private Map<String, SimpleDateFormat> map = new HashMap<String, SimpleDateFormat>();
+	/**
+	 * SimpleDateFormat 非线程安全，结合 WriterBuffer 中的 ThreadLocal 确保线程安全
+	 */
+	private Map<String, SimpleDateFormat> map = new HashMap<String, SimpleDateFormat>(16, 0.25F);
 	
 	public SimpleDateFormat getDateFormat(String datePattern) {
 		SimpleDateFormat ret = map.get(datePattern);

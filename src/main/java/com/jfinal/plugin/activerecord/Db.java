@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,15 @@
 
 package com.jfinal.plugin.activerecord;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.function.Function;
 import com.jfinal.kit.SyncWriteMap;
 
 /**
@@ -160,12 +165,20 @@ public class Db {
 		return MAIN.queryFloat(sql);
 	}
 	
-	public static java.math.BigDecimal queryBigDecimal(String sql, Object... paras) {
+	public static BigDecimal queryBigDecimal(String sql, Object... paras) {
 		return MAIN.queryBigDecimal(sql, paras);
 	}
 	
-	public static java.math.BigDecimal queryBigDecimal(String sql) {
+	public static BigDecimal queryBigDecimal(String sql) {
 		return MAIN.queryBigDecimal(sql);
+	}
+	
+	public static BigInteger queryBigInteger(String sql, Object... paras) {
+		return MAIN.queryBigInteger(sql, paras);
+	}
+	
+	public static BigInteger queryBigInteger(String sql) {
+		return MAIN.queryBigInteger(sql);
 	}
 	
 	public static byte[] queryBytes(String sql, Object... paras) {
@@ -182,6 +195,14 @@ public class Db {
 	
 	public static java.util.Date queryDate(String sql) {
 		return MAIN.queryDate(sql);
+	}
+	
+	public static LocalDateTime queryLocalDateTime(String sql, Object... paras) {
+		return MAIN.queryLocalDateTime(sql, paras);
+	}
+	
+	public static LocalDateTime queryLocalDateTime(String sql) {
+		return MAIN.queryLocalDateTime(sql);
 	}
 	
 	public static java.sql.Time queryTime(String sql, Object... paras) {
@@ -533,16 +554,36 @@ public class Db {
 		return MAIN.tx(config, transactionLevel, atom);
 	}
 	
-	public static boolean tx(int transactionLevel, IAtom atom) {
-		return MAIN.tx(transactionLevel, atom);
-	}
-	
 	/**
 	 * Execute transaction with default transaction level.
 	 * @see #tx(int, IAtom)
 	 */
 	public static boolean tx(IAtom atom) {
 		return MAIN.tx(atom);
+	}
+	
+	public static boolean tx(int transactionLevel, IAtom atom) {
+		return MAIN.tx(transactionLevel, atom);
+	}
+	
+	/**
+	 * 主要用于嵌套事务场景
+	 * 
+	 * 实例：https://jfinal.com/feedback/4008
+	 * 
+	 * 默认情况下嵌套事务会被合并成为一个事务，那么内层与外层任何地方回滚事务
+	 * 所有嵌套层都将回滚事务，也就是说嵌套事务无法独立提交与回滚
+	 * 
+	 * 使用 txInNewThread(...) 方法可以实现层之间的事务控制的独立性
+	 * 由于事务处理是将 Connection 绑定到线程上的，所以 txInNewThread(...)
+	 * 通过建立新线程来实现嵌套事务的独立控制
+	 */
+	public static Future<Boolean> txInNewThread(IAtom atom) {
+		return MAIN.txInNewThread(atom);
+	}
+	
+	public static Future<Boolean> txInNewThread(int transactionLevel, IAtom atom) {
+		return MAIN.txInNewThread(transactionLevel, atom);
 	}
 	
 	/**
@@ -634,7 +675,7 @@ public class Db {
     /**
 	 * @see DbPro#batchSave(String, List, int)
      */
-    public static int[] batchSave(String tableName, List<Record> recordList, int batchSize) {
+    public static int[] batchSave(String tableName, List<? extends Record> recordList, int batchSize) {
     	return MAIN.batchSave(tableName, recordList, batchSize);
     }
     
@@ -648,14 +689,14 @@ public class Db {
     /**
 	 * @see DbPro#batchUpdate(String, String, List, int)
      */
-    public static int[] batchUpdate(String tableName, String primaryKey, List<Record> recordList, int batchSize) {
+    public static int[] batchUpdate(String tableName, String primaryKey, List<? extends Record> recordList, int batchSize) {
     	return MAIN.batchUpdate(tableName, primaryKey, recordList, batchSize);
     }
     
     /**
 	 * @see DbPro#batchUpdate(String, List, int)
      */
-    public static int[] batchUpdate(String tableName, List<Record> recordList, int batchSize) {
+    public static int[] batchUpdate(String tableName, List<? extends Record> recordList, int batchSize) {
     	return MAIN.batchUpdate(tableName, recordList, batchSize);
     }
     
@@ -705,6 +746,80 @@ public class Db {
 	
 	public static Page<Record> paginate(int pageNumber, int pageSize, boolean isGroupBySql, SqlPara sqlPara) {
 		return MAIN.paginate(pageNumber, pageSize, isGroupBySql, sqlPara);
+	}
+	
+	// ---------
+	
+	/**
+	 * 迭代处理每一个查询出来的 Record 对象
+	 * <pre>
+	 * 例子：
+	 * Db.each(record -> {
+	 *    // 处理 record 的代码在此
+	 *    
+	 *    // 返回 true 继续循环处理下一条数据，返回 false 立即终止循环
+	 *    return true;
+	 * }, sql, paras);
+	 * </pre>
+	 */
+	public static void each(Function<Record, Boolean> func, String sql, Object... paras) {
+		MAIN.each(func, sql, paras);
+	}
+	
+	// ---------
+	
+	/**
+	 * 使用 sql 模板进行查询，可以省去 Db.getSqlPara(...) 调用
+	 * 
+	 * <pre>
+	 * 例子：
+	 * Db.template("blog.find", Kv.by("id", 123).find();
+	 * </pre>
+	 */
+	public static DbTemplate template(String key, Map data) {
+		return MAIN.template(key, data);
+	}
+	
+	/**
+	 * 使用 sql 模板进行查询，可以省去 Db.getSqlPara(...) 调用
+	 * 
+	 * <pre>
+	 * 例子：
+	 * Db.template("blog.find", 123).find();
+	 * </pre>
+	 */
+	public static DbTemplate template(String key, Object... paras) {
+		return MAIN.template(key, paras);
+	}
+	
+	// ---------
+	
+	/**
+	 * 使用字符串变量作为 sql 模板进行查询，可省去外部 sql 文件来使用
+	 * sql 模板功能
+	 * 
+	 * <pre>
+	 * 例子：
+	 * String sql = "select * from blog where id = #para(id)";
+	 * Db.templateByString(sql, Kv.by("id", 123).find();
+	 * </pre>
+	 */
+	public static DbTemplate templateByString(String content, Map data) {
+		return MAIN.templateByString(content, data);
+	}
+	
+	/**
+	 * 使用字符串变量作为 sql 模板进行查询，可省去外部 sql 文件来使用
+	 * sql 模板功能
+	 * 
+	 * <pre>
+	 * 例子：
+	 * String sql = "select * from blog where id = #para(0)";
+	 * Db.templateByString(sql, 123).find();
+	 * </pre>
+	 */
+	public static DbTemplate templateByString(String content, Object... paras) {
+		return MAIN.templateByString(content, paras);
 	}
 }
 

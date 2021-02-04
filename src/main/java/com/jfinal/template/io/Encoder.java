@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ package com.jfinal.template.io;
 /**
  * Encoder
  */
-public abstract class Encoder {
+public interface Encoder {
 	
-	public abstract float maxBytesPerChar();
+	public float maxBytesPerChar();
 	
-	public abstract int encode(char[] chars, int offset, int len, byte[] bytes);
+	public int encode(char[] chars, int offset, int len, byte[] bytes);
 }
 

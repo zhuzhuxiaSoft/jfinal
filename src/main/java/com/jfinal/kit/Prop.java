@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,11 +168,14 @@ public class Prop {
 	}
 	
 	public String get(String key) {
-		return properties.getProperty(key);
+		// 下面这行代码只要 key 存在，就不会返回 null。未给定 value 或者给定一个或多个空格都将返回 ""
+		String value = properties.getProperty(key);
+		return value != null && value.length() != 0 ? value.trim() : null;
 	}
 	
 	public String get(String key, String defaultValue) {
-		return properties.getProperty(key, defaultValue);
+		String value = properties.getProperty(key);
+		return value != null && value.length() != 0 ? value.trim() : defaultValue;
 	}
 	
 	public Integer getInt(String key) {
@@ -195,6 +198,18 @@ public class Prop {
 		String value = properties.getProperty(key);
 		if (value != null) {
 			return Long.parseLong(value.trim());
+		}
+		return defaultValue;
+	}
+	
+	public Double getDouble(String key) {
+		return getDouble(key, null);
+	}
+	
+	public Double getDouble(String key, Double defaultValue) {
+		String value = properties.getProperty(key);
+		if (value != null) {
+			return Double.parseDouble(value.trim());
 		}
 		return defaultValue;
 	}

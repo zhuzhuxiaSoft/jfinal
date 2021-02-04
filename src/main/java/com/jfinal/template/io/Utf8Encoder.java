@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.jfinal.template.io;
 
-import java.nio.charset.MalformedInputException;
+// import java.nio.charset.MalformedInputException;
 
 /**
  * Utf8Encoder
@@ -24,7 +24,7 @@ import java.nio.charset.MalformedInputException;
  * http://grepcode.com/file/repository.grepcode.com/java/root/jdk/openjdk/8u40-b25/sun/nio/cs/UTF_8.java?av=f
  * http://grepcode.com/search?query=ArrayEncoder&start=0&entity=type&n=
  */
-public class Utf8Encoder extends Encoder {
+public class Utf8Encoder implements Encoder {
 	
 	public static final Utf8Encoder me = new Utf8Encoder();
 	
@@ -62,12 +62,16 @@ public class Utf8Encoder extends Encoder {
                         if (Character.isLowSurrogate(d)) {
                             uc = Character.toCodePoint(c, d);
                         } else {
-                            throw new RuntimeException("encode UTF8 error", new MalformedInputException(1));
+                            // throw new RuntimeException("encode UTF8 error", new MalformedInputException(1));
+                            bytes[dp++] = (byte) '?';
+                            continue;
                         }
                     }
                 } else {
                     if (Character.isLowSurrogate(c)) {
-                        throw new RuntimeException("encode UTF8 error", new MalformedInputException(1));
+                        // throw new RuntimeException("encode UTF8 error", new MalformedInputException(1));
+                        bytes[dp++] = (byte) '?';
+                        continue;
                     } else {
                         uc = c;
                     }

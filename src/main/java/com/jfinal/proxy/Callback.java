@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package com.jfinal.plugin.auth;
+package com.jfinal.proxy;
 
-public interface ISession {
-	String getId();
-	Object getAttr(String name);
-	ISession setAttr(String name, Object value);
-	String[] getAttrNames();
-	void removeAttr(String name);
-	void invalidate(String accessToken);
+/**
+ * Callback
+ */
+@FunctionalInterface
+public interface Callback {
+	public Object call(Object[] args) throws Throwable;
 }
+
+
+

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,11 @@ public class Cron4jPlugin implements IPlugin {
 	
 	private List<TaskInfo> taskInfoList = new ArrayList<TaskInfo>();
 	public static final String defaultConfigName = "cron4j";
-
+	
+	public List<TaskInfo> getTaskInfoList() {
+		return taskInfoList;
+	}
+	
 	public Cron4jPlugin() {
 
 	}

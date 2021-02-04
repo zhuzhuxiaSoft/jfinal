@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,14 @@ public class StaticMethod extends Expr {
 		} catch (Exception e) {
 			throw new ParseException(e.getMessage(), location, e);
 		}
+		
+		if (MethodKit.isForbiddenClass(this.clazz)) {
+			throw new ParseException("Forbidden class: " + this.clazz.getName(), location);
+		}
+		if (MethodKit.isForbiddenMethod(methodName)) {
+			throw new ParseException("Forbidden method: " + methodName, location);
+		}
+		
 		this.methodName = methodName;
 		this.exprList = exprList;
 		this.location = location;
@@ -61,7 +69,7 @@ public class StaticMethod extends Expr {
 		try {
 			MethodInfo methodInfo = MethodKit.getMethod(clazz, methodName, argValues);
 			
-			if (methodInfo != null) {
+			if (methodInfo.notNull()) {
 				if (methodInfo.isStatic()) {
 					return methodInfo.invoke(null, argValues);
 				} else {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 package com.jfinal.aop;
+
+import com.jfinal.proxy.Proxy;
 
 /**
  * duang duang duang
@@ -36,16 +38,16 @@ public class Duang {
 	private Duang() {}
 	
 	public static <T> T duang(Class<T> targetClass) {
-		return (T)Enhancer.enhance(targetClass);
+		// return (T)Enhancer.enhance(targetClass);
+		return Proxy.get(targetClass);
 	}
 	
 	/**
 	 * 下一个版本的 aop 将不再支持 inject interceptor，所以本方法被 Deprecated
-	 */
 	@Deprecated
 	public static <T> T duang(Class<T> targetClass, Interceptor... injectInters) {
 		return (T)Enhancer.enhance(targetClass, injectInters);
-	}
+	} */
 }
 
 

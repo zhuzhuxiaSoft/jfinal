@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ public class ByteWriter extends Writer {
 	char[] chars;
 	byte[] bytes;
 	
+	boolean inUse;	// 支持 reentrant
+	
 	public ByteWriter(Encoder encoder, int bufferSize) {
 		this.encoder = encoder;
 		this.chars = new char[bufferSize];
@@ -37,28 +39,36 @@ public class ByteWriter extends Writer {
 	}
 	
 	public ByteWriter init(OutputStream outputStream) {
+		inUse = true;
 		this.out = outputStream;
 		return this;
+	}
+	
+	public void close() {
+		inUse = false;
+		out = null;
+	}
+	
+	public boolean isInUse() {
+		return inUse;
 	}
 	
 	public void flush() throws IOException {
 		out.flush();
 	}
 	
-	public void close() {
-		out = null;
-	}
-	
 	public void write(String str, int offset, int len) throws IOException {
-		while (len > chars.length) {
-			write(str, offset, chars.length);
-			offset += chars.length;
-			len -= chars.length;
+		int size, byteLen;
+		while (len > 0) {
+			size = (len > chars.length ? chars.length : len);
+			
+			str.getChars(offset, offset + size, chars, 0);
+			byteLen = encoder.encode(chars, 0, size, bytes);
+			out.write(bytes, 0, byteLen);
+			
+			offset += size;
+			len -= size;
 		}
-		
-		str.getChars(offset, offset + len, chars, 0);
-		int byteLen = encoder.encode(chars, 0, len, bytes);
-		out.write(bytes, 0, byteLen);
 	}
 	
 	public void write(String str) throws IOException {
@@ -66,15 +76,17 @@ public class ByteWriter extends Writer {
 	}
 	
 	public void write(StringBuilder stringBuilder, int offset, int len) throws IOException {
-		while (len > chars.length) {
-			write(stringBuilder, offset, chars.length);
-			offset += chars.length;
-			len -= chars.length;
+		int size, byteLen;
+		while (len > 0) {
+			size = (len > chars.length ? chars.length : len);
+			
+			stringBuilder.getChars(offset, offset + size, chars, 0);
+			byteLen = encoder.encode(chars, 0, size, bytes);
+			out.write(bytes, 0, byteLen);
+			
+			offset += size;
+			len -= size;
 		}
-		
-		stringBuilder.getChars(offset, offset + len, chars, 0);
-		int byteLen = encoder.encode(chars, 0, len, bytes);
-		out.write(bytes, 0, byteLen);
 	}
 	
 	public void write(StringBuilder stringBuilder) throws IOException {

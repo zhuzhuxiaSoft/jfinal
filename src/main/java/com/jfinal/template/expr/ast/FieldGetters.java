@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ public class FieldGetters {
 			String getterName = "get" + StrKit.firstCharToUpperCase(fieldName);
 			java.lang.reflect.Method[] methodArray = targetClass.getMethods();
 			for (java.lang.reflect.Method method : methodArray) {
-				if (method.getName().equals(getterName) && method.getParameterTypes().length == 0) {
+				if (method.getName().equals(getterName) && method.getParameterCount() == 0) {
 					// if (MethodKit.isForbiddenMethod(getterName)) {
 						// throw new RuntimeException("Forbidden method: " + getterName);
 					// }
@@ -115,7 +115,7 @@ public class FieldGetters {
 			String isMethodName = "is" + StrKit.firstCharToUpperCase(fieldName);
 			java.lang.reflect.Method[] methodArray = targetClass.getMethods();
 			for (java.lang.reflect.Method method : methodArray) {
-				if (method.getName().equals(isMethodName) && method.getParameterTypes().length == 0) {
+				if (method.getName().equals(isMethodName) && method.getParameterCount() == 0) {
 					Class<?> returnType = method.getReturnType();
 					if (returnType == Boolean.class || returnType == boolean.class) {
 						return new IsMethodFieldGetter(method);

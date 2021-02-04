@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import com.jfinal.plugin.activerecord.CPI;
 import com.jfinal.plugin.activerecord.Config;
 import com.jfinal.plugin.activerecord.ModelBuilder;
@@ -38,8 +39,14 @@ public class TimestampProcessedRecordBuilder extends RecordBuilder {
 	
 	public static final TimestampProcessedRecordBuilder me = new TimestampProcessedRecordBuilder();
 	
-	@SuppressWarnings("unchecked")
+	@Override
 	public List<Record> build(Config config, ResultSet rs) throws SQLException {
+		return build(config, rs, null);
+	}
+	
+	@Override
+	@SuppressWarnings("unchecked")
+	public List<Record> build(Config config, ResultSet rs, Function<Record, Boolean> func) throws SQLException {
 		List<Record> result = new ArrayList<Record>();
 		ResultSetMetaData rsmd = rs.getMetaData();
 		int columnCount = rsmd.getColumnCount();
@@ -72,7 +79,14 @@ public class TimestampProcessedRecordBuilder extends RecordBuilder {
 				
 				columns.put(labelNames[i], value);
 			}
-			result.add(record);
+			
+			if (func == null) {
+				result.add(record);
+			} else {
+				if ( ! func.apply(record) ) {
+					break ;
+				}
+			}
 		}
 		return result;
 	}

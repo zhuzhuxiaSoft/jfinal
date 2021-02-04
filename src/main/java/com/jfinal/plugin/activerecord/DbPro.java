@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,28 @@
 
 package com.jfinal.plugin.activerecord;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.function.Function;
 import com.jfinal.kit.LogKit;
 import com.jfinal.kit.StrKit;
+import com.jfinal.kit.TimeKit;
 import com.jfinal.plugin.activerecord.cache.ICache;
 import static com.jfinal.plugin.activerecord.DbKit.NULL_PARA_ARRAY;
 
@@ -57,28 +67,29 @@ public class DbPro {
 		return config;
 	}
 	
-	<T> List<T> query(Config config, Connection conn, String sql, Object... paras) throws SQLException {
+	protected <T> List<T> query(Config config, Connection conn, String sql, Object... paras) throws SQLException {
 		List result = new ArrayList();
-		PreparedStatement pst = conn.prepareStatement(sql);
-		config.dialect.fillStatement(pst, paras);
-		ResultSet rs = pst.executeQuery();
-		int colAmount = rs.getMetaData().getColumnCount();
-		if (colAmount > 1) {
-			while (rs.next()) {
-				Object[] temp = new Object[colAmount];
-				for (int i=0; i<colAmount; i++) {
-					temp[i] = rs.getObject(i + 1);
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			config.dialect.fillStatement(pst, paras);
+			ResultSet rs = pst.executeQuery();
+			int colAmount = rs.getMetaData().getColumnCount();
+			if (colAmount > 1) {
+				while (rs.next()) {
+					Object[] temp = new Object[colAmount];
+					for (int i=0; i<colAmount; i++) {
+						temp[i] = rs.getObject(i + 1);
+					}
+					result.add(temp);
 				}
-				result.add(temp);
 			}
-		}
-		else if(colAmount == 1) {
-			while (rs.next()) {
-				result.add(rs.getObject(1));
+			else if(colAmount == 1) {
+				while (rs.next()) {
+					result.add(rs.getObject(1));
+				}
 			}
+			DbKit.close(rs);
+			return result;
 		}
-		DbKit.close(rs, pst);
-		return result;
 	}
 	
 	/**
@@ -194,12 +205,34 @@ public class DbPro {
 		return queryFloat(sql, NULL_PARA_ARRAY);
 	}
 	
-	public java.math.BigDecimal queryBigDecimal(String sql, Object... paras) {
-		return (java.math.BigDecimal)queryColumn(sql, paras);
+	public BigDecimal queryBigDecimal(String sql, Object... paras) {
+		Object n = queryColumn(sql, paras);
+		if (n instanceof BigDecimal) {
+			return (BigDecimal)n;
+		} else if (n != null) {
+			return new BigDecimal(n.toString());
+		} else {
+			return null;
+		}
 	}
 	
-	public java.math.BigDecimal queryBigDecimal(String sql) {
-		return (java.math.BigDecimal)queryColumn(sql, NULL_PARA_ARRAY);
+	public BigDecimal queryBigDecimal(String sql) {
+		return queryBigDecimal(sql, NULL_PARA_ARRAY);
+	}
+	
+	public BigInteger queryBigInteger(String sql, Object... paras) {
+		Object n = queryColumn(sql, paras);
+		if (n instanceof BigInteger) {
+			return (BigInteger)n;
+		} else if (n != null) {
+			return new BigInteger(n.toString());
+		} else {
+			return null;
+		}
+	}
+	
+	public BigInteger queryBigInteger(String sql) {
+		return queryBigInteger(sql, NULL_PARA_ARRAY);
 	}
 	
 	public byte[] queryBytes(String sql, Object... paras) {
@@ -211,11 +244,48 @@ public class DbPro {
 	}
 	
 	public java.util.Date queryDate(String sql, Object... paras) {
-		return (java.util.Date)queryColumn(sql, paras);
+		Object d = queryColumn(sql, paras);
+		
+		if (d instanceof Temporal) {
+			if (d instanceof LocalDateTime) {
+				return TimeKit.toDate((LocalDateTime)d);
+			}
+			if (d instanceof LocalDate) {
+				return TimeKit.toDate((LocalDate)d);
+			}
+			if (d instanceof LocalTime) {
+				return TimeKit.toDate((LocalTime)d);
+			}
+		}
+		
+		return (java.util.Date)d;
 	}
 	
 	public java.util.Date queryDate(String sql) {
-		return (java.util.Date)queryColumn(sql, NULL_PARA_ARRAY);
+		return queryDate(sql, NULL_PARA_ARRAY);
+	}
+	
+	public LocalDateTime queryLocalDateTime(String sql, Object... paras) {
+		Object d = queryColumn(sql, paras);
+		
+		if (d instanceof LocalDateTime) {
+			return (LocalDateTime)d;
+		}
+		if (d instanceof LocalDate) {
+			return ((LocalDate)d).atStartOfDay();
+		}
+		if (d instanceof LocalTime) {
+			return LocalDateTime.of(LocalDate.now(), (LocalTime)d);
+		}
+		if (d instanceof java.util.Date) {
+			return TimeKit.toLocalDateTime((java.util.Date)d);
+		}
+		
+		return (LocalDateTime)d;
+	}
+	
+	public LocalDateTime queryLocalDateTime(String sql) {
+		return queryLocalDateTime(sql, NULL_PARA_ARRAY);
 	}
 	
 	public java.sql.Time queryTime(String sql, Object... paras) {
@@ -272,12 +342,12 @@ public class DbPro {
 	/**
 	 * Execute sql update
 	 */
-	int update(Config config, Connection conn, String sql, Object... paras) throws SQLException {
-		PreparedStatement pst = conn.prepareStatement(sql);
-		config.dialect.fillStatement(pst, paras);
-		int result = pst.executeUpdate();
-		DbKit.close(pst);
-		return result;
+	protected int update(Config config, Connection conn, String sql, Object... paras) throws SQLException {
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			config.dialect.fillStatement(pst, paras);
+			int result = pst.executeUpdate();
+			return result;
+		}
 	}
 	
 	/**
@@ -308,13 +378,14 @@ public class DbPro {
 		return update(sql, NULL_PARA_ARRAY);
 	}
 	
-	List<Record> find(Config config, Connection conn, String sql, Object... paras) throws SQLException {
-		PreparedStatement pst = conn.prepareStatement(sql);
-		config.dialect.fillStatement(pst, paras);
-		ResultSet rs = pst.executeQuery();
-		List<Record> result = config.dialect.buildRecordList(config, rs);	// RecordBuilder.build(config, rs);
-		DbKit.close(rs, pst);
-		return result;
+	protected List<Record> find(Config config, Connection conn, String sql, Object... paras) throws SQLException {
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			config.dialect.fillStatement(pst, paras);
+			ResultSet rs = pst.executeQuery();
+			List<Record> result = config.dialect.buildRecordList(config, rs);	// RecordBuilder.build(config, rs);
+			DbKit.close(rs);
+			return result;
+		}
 	}
 	
 	/**
@@ -579,7 +650,7 @@ public class DbPro {
 		return new Page<Record>(list, pageNumber, pageSize, totalPage, (int)totalRow);
 	}
 	
-	Page<Record> paginate(Config config, Connection conn, int pageNumber, int pageSize, String select, String sqlExceptSelect, Object... paras) throws SQLException {
+	protected Page<Record> paginate(Config config, Connection conn, int pageNumber, int pageSize, String select, String sqlExceptSelect, Object... paras) throws SQLException {
 		String totalRowSql = "select count(*) " + config.dialect.replaceOrderBy(sqlExceptSelect);
 		StringBuilder findSql = new StringBuilder();
 		findSql.append(select).append(' ').append(sqlExceptSelect);
@@ -607,23 +678,21 @@ public class DbPro {
 		return doPaginateByFullSql(pageNumber, pageSize, isGroupBySql, totalRowSql, findSql, paras);
 	}
 	
-	boolean save(Config config, Connection conn, String tableName, String primaryKey, Record record) throws SQLException {
+	protected boolean save(Config config, Connection conn, String tableName, String primaryKey, Record record) throws SQLException {
 		String[] pKeys = primaryKey.split(",");
 		List<Object> paras = new ArrayList<Object>();
 		StringBuilder sql = new StringBuilder();
 		config.dialect.forDbSave(tableName, pKeys, record, sql, paras);
 		
-		PreparedStatement pst;
-		if (config.dialect.isOracle()) {
-			pst = conn.prepareStatement(sql.toString(), pKeys);
-		} else {
-			pst = conn.prepareStatement(sql.toString(), Statement.RETURN_GENERATED_KEYS);
+		try (PreparedStatement pst =
+				config.dialect.isOracle() ?
+				conn.prepareStatement(sql.toString(), pKeys) :
+				conn.prepareStatement(sql.toString(), Statement.RETURN_GENERATED_KEYS)) {
+			config.dialect.fillStatement(pst, paras);
+			int result = pst.executeUpdate();
+			config.dialect.getRecordGeneratedKey(pst, record, pKeys);
+			return result >= 1;
 		}
-		config.dialect.fillStatement(pst, paras);
-		int result = pst.executeUpdate();
-		config.dialect.getRecordGeneratedKey(pst, record, pKeys);
-		DbKit.close(pst);
-		return result >= 1;
 	}
 	
 	/**
@@ -657,7 +726,7 @@ public class DbPro {
 		return save(tableName, config.dialect.getDefaultPrimaryKey(), record);
 	}
 	
-	boolean update(Config config, Connection conn, String tableName, String primaryKey, Record record) throws SQLException {
+	protected boolean update(Config config, Connection conn, String tableName, String primaryKey, Record record) throws SQLException {
 		String[] pKeys = primaryKey.split(",");
 		Object[] ids = new Object[pKeys.length];
 		
@@ -725,7 +794,7 @@ public class DbPro {
 	 * @param config the Config object
 	 * @param callback the ICallback interface
 	 */
-	Object execute(Config config, ICallback callback) {
+	protected Object execute(Config config, ICallback callback) {
 		Connection conn = null;
 		try {
 			conn = config.getConnection();
@@ -744,7 +813,7 @@ public class DbPro {
 	 * @param atom the atom operation
 	 * @return true if transaction executing succeed otherwise false
 	 */
-	boolean tx(Config config, int transactionLevel, IAtom atom) {
+	protected boolean tx(Config config, int transactionLevel, IAtom atom) {
 		Connection conn = config.getThreadLocalConnection();
 		if (conn != null) {	// Nested transaction support
 			try {
@@ -795,16 +864,44 @@ public class DbPro {
 		}
 	}
 	
-	public boolean tx(int transactionLevel, IAtom atom) {
-		return tx(config, transactionLevel, atom);
-	}
-	
 	/**
 	 * Execute transaction with default transaction level.
 	 * @see #tx(int, IAtom)
 	 */
 	public boolean tx(IAtom atom) {
 		return tx(config, config.getTransactionLevel(), atom);
+	}
+	
+	public boolean tx(int transactionLevel, IAtom atom) {
+		return tx(config, transactionLevel, atom);
+	}
+	
+	/**
+	 * 主要用于嵌套事务场景
+	 * 
+	 * 实例：https://jfinal.com/feedback/4008
+	 * 
+	 * 默认情况下嵌套事务会被合并成为一个事务，那么内层与外层任何地方回滚事务
+	 * 所有嵌套层都将回滚事务，也就是说嵌套事务无法独立提交与回滚
+	 * 
+	 * 使用 txInNewThread(...) 方法可以实现层之间的事务控制的独立性
+	 * 由于事务处理是将 Connection 绑定到线程上的，所以 txInNewThread(...)
+	 * 通过建立新线程来实现嵌套事务的独立控制
+	 */
+	public Future<Boolean> txInNewThread(IAtom atom) {
+		FutureTask<Boolean> task = new FutureTask<>(() -> tx(config, config.getTransactionLevel(), atom));
+		Thread thread = new Thread(task);
+		thread.setDaemon(true);
+		thread.start();
+		return task;
+	}
+	
+	public Future<Boolean> txInNewThread(int transactionLevel, IAtom atom) {
+		FutureTask<Boolean> task = new FutureTask<>(() -> tx(config, transactionLevel, atom));
+		Thread thread = new Thread(task);
+		thread.setDaemon(true);
+		thread.start();
+		return task;
 	}
 	
 	/**
@@ -897,44 +994,45 @@ public class DbPro {
 		int counter = 0;
 		int pointer = 0;
 		int[] result = new int[paras.length];
-		PreparedStatement pst = conn.prepareStatement(sql);
-		for (int i=0; i<paras.length; i++) {
-			for (int j=0; j<paras[i].length; j++) {
-				Object value = paras[i][j];
-				if (value instanceof java.util.Date) {
-					if (value instanceof java.sql.Date) {
-						pst.setDate(j + 1, (java.sql.Date)value);
-					} else if (value instanceof java.sql.Timestamp) {
-						pst.setTimestamp(j + 1, (java.sql.Timestamp)value);
-					} else {
-						// Oracle、SqlServer 中的 TIMESTAMP、DATE 支持 new Date() 给值
-						java.util.Date d = (java.util.Date)value;
-						pst.setTimestamp(j + 1, new java.sql.Timestamp(d.getTime()));
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			for (int i=0; i<paras.length; i++) {
+				for (int j=0; j<paras[i].length; j++) {
+					Object value = paras[i][j];
+					if (value instanceof java.util.Date) {
+						if (value instanceof java.sql.Date) {
+							pst.setDate(j + 1, (java.sql.Date)value);
+						} else if (value instanceof java.sql.Timestamp) {
+							pst.setTimestamp(j + 1, (java.sql.Timestamp)value);
+						} else {
+							// Oracle、SqlServer 中的 TIMESTAMP、DATE 支持 new Date() 给值
+							java.util.Date d = (java.util.Date)value;
+							pst.setTimestamp(j + 1, new java.sql.Timestamp(d.getTime()));
+						}
+					}
+					else {
+						pst.setObject(j + 1, value);
 					}
 				}
-				else {
-					pst.setObject(j + 1, value);
+				pst.addBatch();
+				if (++counter >= batchSize) {
+					counter = 0;
+					int[] r = pst.executeBatch();
+					if (isInTransaction == false)
+						conn.commit();
+					for (int k=0; k<r.length; k++)
+						result[pointer++] = r[k];
 				}
 			}
-			pst.addBatch();
-			if (++counter >= batchSize) {
-				counter = 0;
+			if (counter != 0) {
 				int[] r = pst.executeBatch();
 				if (isInTransaction == false)
 					conn.commit();
-				for (int k=0; k<r.length; k++)
+				for (int k = 0; k < r.length; k++)
 					result[pointer++] = r[k];
 			}
+			
+			return result;
 		}
-		if (counter != 0) {
-			int[] r = pst.executeBatch();
-			if (isInTransaction == false)
-				conn.commit();
-			for (int k = 0; k < r.length; k++)
-				result[pointer++] = r[k];
-		}
-		DbKit.close(pst);
-		return result;
 	}
 	
     /**
@@ -984,45 +1082,46 @@ public class DbPro {
 		int pointer = 0;
 		int size = list.size();
 		int[] result = new int[size];
-		PreparedStatement pst = conn.prepareStatement(sql);
-		for (int i=0; i<size; i++) {
-			Map map = isModel ? ((Model)list.get(i))._getAttrs() : ((Record)list.get(i)).getColumns();
-			for (int j=0; j<columnArray.length; j++) {
-				Object value = map.get(columnArray[j]);
-				if (value instanceof java.util.Date) {
-					if (value instanceof java.sql.Date) {
-						pst.setDate(j + 1, (java.sql.Date)value);
-					} else if (value instanceof java.sql.Timestamp) {
-						pst.setTimestamp(j + 1, (java.sql.Timestamp)value);
-					} else {
-						// Oracle、SqlServer 中的 TIMESTAMP、DATE 支持 new Date() 给值
-						java.util.Date d = (java.util.Date)value;
-						pst.setTimestamp(j + 1, new java.sql.Timestamp(d.getTime()));
+		try (PreparedStatement pst = conn.prepareStatement(sql)) {
+			for (int i=0; i<size; i++) {
+				Map map = isModel ? ((Model)list.get(i))._getAttrs() : ((Record)list.get(i)).getColumns();
+				for (int j=0; j<columnArray.length; j++) {
+					Object value = map.get(columnArray[j]);
+					if (value instanceof java.util.Date) {
+						if (value instanceof java.sql.Date) {
+							pst.setDate(j + 1, (java.sql.Date)value);
+						} else if (value instanceof java.sql.Timestamp) {
+							pst.setTimestamp(j + 1, (java.sql.Timestamp)value);
+						} else {
+							// Oracle、SqlServer 中的 TIMESTAMP、DATE 支持 new Date() 给值
+							java.util.Date d = (java.util.Date)value;
+							pst.setTimestamp(j + 1, new java.sql.Timestamp(d.getTime()));
+						}
+					}
+					else {
+						pst.setObject(j + 1, value);
 					}
 				}
-				else {
-					pst.setObject(j + 1, value);
+				pst.addBatch();
+				if (++counter >= batchSize) {
+					counter = 0;
+					int[] r = pst.executeBatch();
+					if (isInTransaction == false)
+						conn.commit();
+					for (int k=0; k<r.length; k++)
+						result[pointer++] = r[k];
 				}
 			}
-			pst.addBatch();
-			if (++counter >= batchSize) {
-				counter = 0;
+			if (counter != 0) {
 				int[] r = pst.executeBatch();
 				if (isInTransaction == false)
 					conn.commit();
-				for (int k=0; k<r.length; k++)
+				for (int k = 0; k < r.length; k++)
 					result[pointer++] = r[k];
 			}
+			
+			return result;
 		}
-		if (counter != 0) {
-			int[] r = pst.executeBatch();
-			if (isInTransaction == false)
-				conn.commit();
-			for (int k = 0; k < r.length; k++)
-				result[pointer++] = r[k];
-		}
-		DbKit.close(pst);
-		return result;
 	}
 	
 	/**
@@ -1066,27 +1165,28 @@ public class DbPro {
 		int pointer = 0;
 		int size = sqlList.size();
 		int[] result = new int[size];
-		Statement st = conn.createStatement();
-		for (int i=0; i<size; i++) {
-			st.addBatch(sqlList.get(i));
-			if (++counter >= batchSize) {
-				counter = 0;
+		try (Statement st = conn.createStatement()) {
+			for (int i=0; i<size; i++) {
+				st.addBatch(sqlList.get(i));
+				if (++counter >= batchSize) {
+					counter = 0;
+					int[] r = st.executeBatch();
+					if (isInTransaction == false)
+						conn.commit();
+					for (int k=0; k<r.length; k++)
+						result[pointer++] = r[k];
+				}
+			}
+			if (counter != 0) {
 				int[] r = st.executeBatch();
 				if (isInTransaction == false)
 					conn.commit();
-				for (int k=0; k<r.length; k++)
+				for (int k = 0; k < r.length; k++)
 					result[pointer++] = r[k];
 			}
+			
+			return result;
 		}
-		if (counter != 0) {
-			int[] r = st.executeBatch();
-			if (isInTransaction == false)
-				conn.commit();
-			for (int k = 0; k < r.length; k++)
-				result[pointer++] = r[k];
-		}
-		DbKit.close(st);
-		return result;
 	}
 	
     /**
@@ -1154,7 +1254,7 @@ public class DbPro {
      * Ensure all the record can use the same sql as the first record.
      * @param tableName the table name
      */
-    public int[] batchSave(String tableName, List<Record> recordList, int batchSize) {
+    public int[] batchSave(String tableName, List<? extends Record> recordList, int batchSize) {
     	if (recordList == null || recordList.size() == 0)
     		return new int[0];
     	
@@ -1222,7 +1322,7 @@ public class DbPro {
      * @param tableName the table name
      * @param primaryKey the primary key of the table, composite primary key is separated by comma character: ","
      */
-    public int[] batchUpdate(String tableName, String primaryKey, List<Record> recordList, int batchSize) {
+    public int[] batchUpdate(String tableName, String primaryKey, List<? extends Record> recordList, int batchSize) {
     	if (recordList == null || recordList.size() == 0)
     		return new int[0];
     	
@@ -1254,7 +1354,7 @@ public class DbPro {
      * Ensure all the records can use the same sql as the first record.
      * @param tableName the table name
      */
-    public int[] batchUpdate(String tableName, List<Record> recordList, int batchSize) {
+    public int[] batchUpdate(String tableName, List<? extends Record> recordList, int batchSize) {
     	return batchUpdate(tableName, config.dialect.getDefaultPrimaryKey(),recordList, batchSize);
     }
     
@@ -1306,6 +1406,59 @@ public class DbPro {
 	public Page<Record> paginate(int pageNumber, int pageSize, boolean isGroupBySql, SqlPara sqlPara) {
 		String[] sqls = PageSqlKit.parsePageSql(sqlPara.getSql());
 		return doPaginate(pageNumber, pageSize, isGroupBySql, sqls[0], sqls[1], sqlPara.getPara());
+	}
+	
+	// ---------
+	
+	/**
+	 * 迭代处理每一个查询出来的 Record 对象
+	 * <pre>
+	 * 例子：
+	 * Db.each(record -> {
+	 *    // 处理 record 的代码在此
+	 *    
+	 *    // 返回 true 继续循环处理下一条数据，返回 false 立即终止循环
+	 *    return true;
+	 * }, sql, paras);
+	 * </pre>
+	 */
+	public void each(Function<Record, Boolean> func, String sql, Object... paras) {
+		Connection conn = null;
+		try {
+			conn = config.getConnection();
+			
+			try (PreparedStatement pst = conn.prepareStatement(sql)) {
+				config.dialect.fillStatement(pst, paras);
+				ResultSet rs = pst.executeQuery();
+				config.dialect.eachRecord(config, rs, func);
+				DbKit.close(rs);
+			}
+			
+		} catch (Exception e) {
+			throw new ActiveRecordException(e);
+		} finally {
+			config.close(conn);
+		}
+	}
+	
+	// ---------
+	
+	public DbTemplate template(String key, Map data) {
+		return new DbTemplate(this, key, data);
+	}
+	
+	public DbTemplate template(String key, Object... paras) {
+		return new DbTemplate(this, key, paras);
+	}
+	
+	// ---------
+	
+	public DbTemplate templateByString(String content, Map data) {
+		return new DbTemplate(true, this, content, data);
+	}
+	
+	public DbTemplate templateByString(String content, Object... paras) {
+		return new DbTemplate(true, this, content, paras);
 	}
 }
 

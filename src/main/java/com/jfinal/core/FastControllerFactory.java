@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@ import java.util.Map;
  *          this.xxx = null;		// 清除本类中声明的属性的值
  *      }
  *      
+ *  警告：Controller 使用 @Inject 注入的依赖，只会在 Controller 被创建时注入一次
+ *       所以，被注入的依赖需要能被反复使用，否则不能使用 FastControllerFactory
  */
 public class FastControllerFactory extends ControllerFactory {
 	
@@ -49,9 +51,22 @@ public class FastControllerFactory extends ControllerFactory {
 		Controller ret = buffers.get().get(controllerClass);
 		if (ret == null) {
 			ret = controllerClass.newInstance();
+			if (injectDependency) {
+				com.jfinal.aop.Aop.inject(ret);
+			}
+			
 			buffers.get().put(controllerClass, ret);
 		}
 		return ret;
+	}
+	
+	/**
+	 * 清除 controller 状态，回收利用
+	 */
+	public void recycle(Controller controller) {
+		if (controller != null) {
+			controller._clear_();
+		}
 	}
 }
 

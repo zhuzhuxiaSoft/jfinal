@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ import java.util.Set;
 import com.jfinal.plugin.redis.serializer.ISerializer;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPubSub;
+import redis.clients.util.SafeEncoder;
 
 /**
  * Cache.
@@ -216,6 +218,18 @@ public class Cache {
 		Jedis jedis = getJedis();
 		try {
 			return jedis.incr(keyToBytes(key));
+		}
+		finally {close(jedis);}
+	}
+	
+	/**
+	 * 获取记数器的值
+	 */
+	public Long getCounter(Object key) {
+		Jedis jedis = getJedis();
+		try {
+			String ret = (String)jedis.get(keyNamingPolicy.getKeyName(key));
+			return ret != null ? Long.parseLong(ret) : null;
 		}
 		finally {close(jedis);}
 	}
@@ -523,8 +537,13 @@ public class Cache {
 		try {
 			Map<byte[], byte[]> data = jedis.hgetAll(keyToBytes(key));
 			Map<Object, Object> result = new HashMap<Object, Object>();
-			for (Entry<byte[], byte[]> e : data.entrySet())
+			if (data == null) {
+				return result;
+			}
+			
+			for (Entry<byte[], byte[]> e : data.entrySet()) {
 				result.put(fieldFromBytes(e.getKey()), valueFromBytes(e.getValue()));
+			}
 			return result;
 		}
 		finally {close(jedis);}
@@ -586,6 +605,18 @@ public class Cache {
 	}
 	
 	/**
+	 * 获取哈希表内记数器的值
+	 */
+	public Long hgetCounter(Object key, Object field) {
+		Jedis jedis = getJedis();
+		try {
+			byte[] ret = jedis.hget(keyToBytes(key), fieldToBytes(field));
+			return ret != null ? Long.parseLong(SafeEncoder.encode(ret)) : null;
+		}
+		finally {close(jedis);}
+	}
+	
+	/**
 	 * 为哈希表 key 中的域 field 加上浮点数增量 increment 。
 	 * 如果哈希表中没有域 field ，那么 HINCRBYFLOAT 会先将域 field 的值设为 0 ，然后再执行加法操作。
 	 * 如果键 key 不存在，那么 HINCRBYFLOAT 会先创建一个哈希表，再创建域 field ，最后再执行加法操作。
@@ -598,6 +629,15 @@ public class Cache {
 		Jedis jedis = getJedis();
 		try {
 			return jedis.hincrByFloat(keyToBytes(key), fieldToBytes(field), value);
+		}
+		finally {close(jedis);}
+	}
+	
+	public Double hgetFloatCounter(Object key, Object field) {
+		Jedis jedis = getJedis();
+		try {
+			byte[] ret = jedis.hget(keyToBytes(key), fieldToBytes(field));
+			return ret != null ? Double.parseDouble(SafeEncoder.encode(ret)) : null;
 		}
 		finally {close(jedis);}
 	}
@@ -621,18 +661,6 @@ public class Cache {
 		Jedis jedis = getJedis();
 		try {
 			return (T)valueFromBytes(jedis.lindex(keyToBytes(key), index));
-		}
-		finally {close(jedis);}
-	}
-	
-	/**
-	 * 获取记数器的值
-	 */
-	public Long getCounter(Object key) {
-		Jedis jedis = getJedis();
-		try {
-			String ret = (String)jedis.get(keyNamingPolicy.getKeyName(key));
-			return ret != null ? Long.parseLong(ret) : null;
 		}
 		finally {close(jedis);}
 	}
@@ -1169,7 +1197,66 @@ public class Cache {
 		}
 		finally {close(jedis);}
 	}
-	
+
+	/**
+	 * subscribe channel [channel …] 订阅一个或多个频道 <br/>
+	 * PS：<br/>
+	 *    取消订阅在 jedisPubSub 中的 unsubscribe 方法。<br/>
+	 *    重要：订阅后代码会阻塞监听发布的内容<br/>
+	 */
+	public void subscribe(final JedisPubSub jedisPubSub, final String... channels) {
+		Jedis jedis = getJedis();
+		try {
+			jedis.subscribe(jedisPubSub, channels);
+		}
+		finally {close(jedis);}
+	}
+
+	/**
+	 * subscribe channel [channel …] 订阅一个或多个频道<br/>
+	 * PS：<br/>
+	 *    取消订阅在 jedisPubSub 中的 unsubscribe 方法。<br/>
+	 */
+	public JedisPubSub subscribeThread(final JedisPubSub jedisPubSub, final String... channels) {
+		new Thread(() -> subscribe(jedisPubSub, channels)).start();
+		return jedisPubSub;
+	}
+
+	/**
+	 * psubscribe pattern [pattern …] 订阅给定模式相匹配的所有频道<br/>
+	 * PS：<br/>
+	 *     取消订阅在 jedisPubSub 中的 punsubscribe 方法。<br/>
+	 *     重要：订阅后代码会阻塞监听发布的内容<br/>
+	 */
+	public void psubscribe(final JedisPubSub jedisPubSub, final String... patterns) {
+		Jedis jedis = getJedis();
+		try {
+			jedis.psubscribe(jedisPubSub, patterns);
+		}
+		finally {close(jedis);}
+	}
+
+	/**
+	 * psubscribe pattern [pattern …] 订阅给定模式相匹配的所有频道<br/>
+	 * PS：<br/>
+	 *     取消订阅在 jedisPubSub 中的 punsubscribe 方法。<br/>
+	 */
+	public JedisPubSub psubscribeThread(final JedisPubSub jedisPubSub, final String... patterns) {
+		new Thread(() -> psubscribe(jedisPubSub, patterns)).start();
+		return jedisPubSub;
+	}
+
+	/**
+	 * publish channel message 给指定的频道发消息
+	 */
+	public Long publish(final String channel, final String message) {
+		Jedis jedis = getJedis();
+		try {
+			return jedis.publish(channel, message);
+		}
+		finally {close(jedis);}
+	}
+
 	// ---------
 	
 	protected byte[] keyToBytes(Object key) {

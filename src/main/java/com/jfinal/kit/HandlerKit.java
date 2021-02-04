@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,13 @@ public class HandlerKit {
 		isHandled[0] = true;
 		
 		String queryString = request.getQueryString();
-		if (queryString != null)
-			url += "?" + queryString;
+		if (queryString != null) {
+			if (url.indexOf('?') == -1) {
+				url = url + "?" + queryString;
+			} else {
+				url = url + "&" + queryString;
+			}
+		}
 		
 		response.setStatus(HttpServletResponse.SC_MOVED_PERMANENTLY);
 		response.setHeader("Location", url);
@@ -58,8 +63,13 @@ public class HandlerKit {
 		isHandled[0] = true;
 		
 		String queryString = request.getQueryString();
-		if (queryString != null)
-			url = url + "?" + queryString;
+		if (queryString != null) {
+			if (url.indexOf('?') == -1) {
+				url = url + "?" + queryString;
+			} else {
+				url = url + "&" + queryString;
+			}
+		}
 		
 		try {
 			response.sendRedirect(url);	// always 302

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import com.jfinal.aop.Enhancer;
 import com.jfinal.core.converter.TypeConverter;
 import com.jfinal.kit.Kv;
 import com.jfinal.kit.StrKit;
@@ -48,7 +47,8 @@ import com.jfinal.upload.UploadFile;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class Controller {
 	
-	private Action action;
+	// 可通过 CPI.getAction(Controller) 获取
+	Action action;
 	
 	private HttpServletRequest request;
 	private HttpServletResponse response;
@@ -103,8 +103,16 @@ public abstract class Controller {
 		return rawData;
 	}
 	
+	public String getControllerPath() {
+		return action.getControllerPath();
+	}
+	
+	/**
+	 * 该方法已改名为 getControllerPath()
+	 */
+	@Deprecated
 	public String getControllerKey() {
-		return action.getControllerKey();
+		return action.getControllerPath();
 	}
 	
 	public String getViewPath() {
@@ -165,7 +173,9 @@ public abstract class Controller {
 	 * @return a String representing the single value of the parameter
 	 */
 	public String getPara(String name) {
-		return request.getParameter(name);
+		// return request.getParameter(name);
+		String result = request.getParameter(name);
+		return result != null && result.length() != 0 ? result : null;
 	}
 	
 	/**
@@ -176,7 +186,7 @@ public abstract class Controller {
 	 */
 	public String getPara(String name, String defaultValue) {
 		String result = request.getParameter(name);
-		return result != null && !"".equals(result) ? result : defaultValue;
+		return result != null && result.length() != 0 ? result : defaultValue;
 	}
 	
 	/**
@@ -406,7 +416,10 @@ public abstract class Controller {
 		try {
 			if (StrKit.isBlank(value))
 				return defaultValue;
-			return new java.text.SimpleDateFormat("yyyy-MM-dd").parse(value.trim());
+			
+			// return new java.text.SimpleDateFormat("yyyy-MM-dd").parse(value.trim());
+			return (Date)TypeConverter.me().convert(Date.class, value);
+			
 		} catch (Exception e) {
 			throw new ActionException(400, renderManager.getRenderFactory().getErrorRender(400),  "Can not parse the parameter \"" + value + "\" to Date value.");
 		}
@@ -709,7 +722,7 @@ public abstract class Controller {
 	 */
 	public String getPara(int index, String defaultValue) {
 		String result = getPara(index);
-		return result != null && !"".equals(result) ? result : defaultValue;
+		return result != null && result.length() != 0 ? result : defaultValue;
 	}
 	
 	/**
@@ -963,23 +976,23 @@ public abstract class Controller {
 	 * @param tokenName the token name used in view
 	 * @param secondsOfTimeOut the seconds of time out, secondsOfTimeOut >= Const.MIN_SECONDS_OF_TOKEN_TIME_OUT
 	 */
-	public void createToken(String tokenName, int secondsOfTimeOut) {
-		com.jfinal.token.TokenManager.createToken(this, tokenName, secondsOfTimeOut);
+	public String createToken(String tokenName, int secondsOfTimeOut) {
+		return com.jfinal.token.TokenManager.createToken(this, tokenName, secondsOfTimeOut);
 	}
 	
 	/**
 	 * Create a token with default token name and with default seconds of time out.
 	 */
-	public void createToken() {
-		createToken(Const.DEFAULT_TOKEN_NAME, Const.DEFAULT_SECONDS_OF_TOKEN_TIME_OUT);
+	public String createToken() {
+		return createToken(Const.DEFAULT_TOKEN_NAME, Const.DEFAULT_SECONDS_OF_TOKEN_TIME_OUT);
 	}
 	
 	/**
 	 * Create a token with default seconds of time out.
 	 * @param tokenName the token name used in view
 	 */
-	public void createToken(String tokenName) {
-		createToken(tokenName, Const.DEFAULT_SECONDS_OF_TOKEN_TIME_OUT);
+	public String createToken(String tokenName) {
+		return createToken(tokenName, Const.DEFAULT_SECONDS_OF_TOKEN_TIME_OUT);
 	}
 	
 	/**
@@ -1141,9 +1154,15 @@ public abstract class Controller {
 	}
 	
 	/**
-	 * Render with text and content type.
-	 * <p>
-	 * Example: renderText("&lt;user id='5888'&gt;James&lt;/user&gt;", "application/xml");
+	 * 响应 text 文本并指定 content type，例如: "text/xml"、"application/javascript"
+	 * 
+	 * 其中 "text/xml"、"application/javascript"、"application/json"、"text/html"
+	 * 从 jfinal 4.6 版本开始可以简写为 "xml"、"js"、"json"、"html"
+	 * 
+	 * <pre>
+	 * 例子：
+	 *    renderText("&lt;user id='5888'&gt;James&lt;/user&gt;", "xml");
+	 * </pre>
 	 */
 	public void renderText(String text, String contentType) {
 		render = renderManager.getRenderFactory().getTextRender(text, contentType);
@@ -1272,7 +1291,7 @@ public abstract class Controller {
 	}
 	
 	/**
-	 * Render with xml view using freemarker.
+	 * Render with xml view using enjoy template.
 	 */
 	public void renderXml(String view) {
 		render = renderManager.getRenderFactory().getXmlRender(view);
@@ -1324,7 +1343,7 @@ public abstract class Controller {
 	
 	// ---------
 	
-	/**
+	/*
 	 * 获取 Aop 代理对象，便于在 action 方法内部调用，可以取代 @Inject 注入
 	 * 
 	 * <pre>
@@ -1339,20 +1358,10 @@ public abstract class Controller {
 	 *    service.justDoIt();
 	 * }
 	 * </pre>
-	 */
+	
 	public <T> T getAopProxy(Class<T> targetClass) {
 		return com.jfinal.aop.Aop.get(targetClass);
-	}
-	
-	/**
-	 * 该功能已被 getAopProxy(...)、@Inject 注入以及 Aop.get(...) 完全取代，不建议使用
-	 */
-	@Deprecated
-	public <T> T enhance(Class<T> targetClass) {
-		return (T)Enhancer.enhance(targetClass);
-	}
-	
-	
+	} */
 	
 	// --------------------
 	

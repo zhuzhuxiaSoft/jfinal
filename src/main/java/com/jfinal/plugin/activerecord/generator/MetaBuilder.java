@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import javax.sql.DataSource;
 import com.jfinal.kit.StrKit;
 import com.jfinal.plugin.activerecord.dialect.Dialect;
 import com.jfinal.plugin.activerecord.dialect.MysqlDialect;
-import com.jfinal.plugin.activerecord.dialect.OracleDialect;
 
 /**
  * MetaBuilder
@@ -43,6 +43,8 @@ public class MetaBuilder {
 	protected DataSource dataSource;
 	protected Dialect dialect = new MysqlDialect();
 	protected Set<String> excludedTables = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
+	
+	protected Predicate<String> tableSkip = null;
 	
 	protected Connection conn = null;
 	protected DatabaseMetaData dbMeta = null;
@@ -73,7 +75,7 @@ public class MetaBuilder {
 	public void addExcludedTable(String... excludedTables) {
 		if (excludedTables != null) {
 			for (String table : excludedTables) {
-				this.excludedTables.add(table);
+				this.excludedTables.add(table.trim());
 			}
 		}
 	}
@@ -137,6 +139,28 @@ public class MetaBuilder {
 	}
 	
 	/**
+	 * 跳过不需要生成器处理的 table
+	 * 
+	 * 由于 setMetaBuilder 将置换掉 MetaBuilder，所以 Generator.addExcludedTable(...)
+	 * 需要放在 setMetaBuilder 之后调用，否则 addExcludedTable 将无效
+	 * 
+	 * 示例：
+		Generator gen = new Generator(...);
+		gen.setMetaBuilder(new MetaBuilder(dataSource).skip(
+			tableName -> {
+				return tableName.startsWith("SYS_");
+			})
+		);
+		gen.addExcludedTable("error_log");	// 注意这行代码要放在上面的之后调用
+		gen.generate();
+		
+	 */
+	public MetaBuilder skip(Predicate<String> tableSkip) {
+		this.tableSkip = tableSkip;
+		return this;
+	}
+	
+	/**
 	 * 构造 modelName，mysql 的 tableName 建议使用小写字母，多单词表名使用下划线分隔，不建议使用驼峰命名
 	 * oracle 之下的 tableName 建议使用下划线分隔多单词名，无论 mysql还是 oralce，tableName 都不建议使用驼峰命名
 	 */
@@ -152,7 +176,7 @@ public class MetaBuilder {
 		}
 		
 		// 将 oralce 大写的 tableName 转成小写，再生成 modelName
-		if (dialect instanceof OracleDialect) {
+		if (dialect.isOracle()) {
 			tableName = tableName.toLowerCase();
 		}
 		
@@ -175,7 +199,7 @@ public class MetaBuilder {
 	 * 3：开发者若在其它库中发现工作不正常，可通过继承 MetaBuilder并覆盖此方法来实现功能
 	 */
 	protected ResultSet getTablesResultSet() throws SQLException {
-		String schemaPattern = dialect instanceof OracleDialect ? dbMeta.getUserName() : null;
+		String schemaPattern = dialect.isOracle() ? dbMeta.getUserName() : null;
 		// return dbMeta.getTables(conn.getCatalog(), schemaPattern, null, new String[]{"TABLE", "VIEW"});
 		return dbMeta.getTables(conn.getCatalog(), schemaPattern, null, new String[]{"TABLE"});	// 不支持 view 生成
 	}
@@ -190,6 +214,12 @@ public class MetaBuilder {
 				continue ;
 			}
 			if (isSkipTable(tableName)) {
+				System.out.println("Skip table :" + tableName);
+				continue ;
+			}
+			
+			// jfinal 4.3 新增过滤 table 机制
+			if (tableSkip != null && tableSkip.test(tableName)) {
 				System.out.println("Skip table :" + tableName);
 				continue ;
 			}
@@ -211,10 +241,17 @@ public class MetaBuilder {
 		String primaryKey = "";
 		int index = 0;
 		while (rs.next()) {
+			String cn = rs.getString("COLUMN_NAME");
+			
+			// 避免 oracle 驱动的 bug 生成重复主键，如：ID,ID
+			if (primaryKey.equals(cn)) {
+				continue ;
+			}
+			
 			if (index++ > 0) {
 				primaryKey += ",";
 			}
-			primaryKey += rs.getString("COLUMN_NAME");
+			primaryKey += cn;
 		}
 		
 		// 无主键的 table 将在后续的 removeNoPrimaryKeyTable() 中被移除，不再抛出异常
@@ -249,10 +286,9 @@ public class MetaBuilder {
 		
 		Map<String, ColumnMeta> columnMetaMap = new HashMap<>();
 		if (generateRemarks) {
-			DatabaseMetaData dbMeta = conn.getMetaData();
 			ResultSet colMetaRs = null;
 			try {
-				colMetaRs = dbMeta.getColumns(null, null, tableMeta.name, null);
+				colMetaRs = dbMeta.getColumns(conn.getCatalog(), null, tableMeta.name, null);
 				while (colMetaRs.next()) {
 					ColumnMeta columnMeta = new ColumnMeta();
 					columnMeta.name = colMetaRs.getString("COLUMN_NAME");
@@ -343,7 +379,7 @@ public class MetaBuilder {
 	 *  3：如果number的长度在1 <= n <= 9
 	 *     number(n) 对应 java.lang.Integer 类型
 	 * 
-	 * 社区分享：《Oracle NUMBER 类型映射改进》http://www.jfinal.com/share/1145
+	 * 社区分享：《Oracle NUMBER 类型映射改进》https://jfinal.com/share/1145
 	 */
 	protected String handleJavaType(String typeStr, ResultSetMetaData rsmd, int column) throws SQLException {
 		// 当前实现只处理 Oracle
@@ -377,7 +413,7 @@ public class MetaBuilder {
 	 * Oralce 反射将得到大写字段名，所以不建议使用驼峰命名，建议使用下划线分隔单词命名法
 	 */
 	protected String buildAttrName(String colName) {
-		if (dialect instanceof OracleDialect) {
+		if (dialect.isOracle()) {
 			colName = colName.toLowerCase();
 		}
 		return StrKit.toCamelCase(colName);

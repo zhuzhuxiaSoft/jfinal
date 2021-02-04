@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,7 +149,7 @@ public class JspRender extends Render {
 	private void handleGetterMethod(Map<String, Object> result, Method[] methods) {
 		for (Method method : methods) {
 			String methodName = method.getName();
-			if (methodName.startsWith("get") && method.getParameterTypes().length == 0) {
+			if (methodName.startsWith("get") && method.getParameterCount() == 0) {
 				throw new RuntimeException("Not finished!");
 			}
 		}

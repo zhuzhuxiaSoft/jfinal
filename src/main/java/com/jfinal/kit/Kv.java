@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +27,10 @@ import com.jfinal.json.Json;
  *    Kv para = Kv.by("id", 123);
  *    User user = user.findFirst(getSqlPara("find", para));
  */
-@SuppressWarnings({"serial", "rawtypes", "unchecked"})
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class Kv extends HashMap {
 	
-	@Deprecated
-	private static final String STATE_OK = "isOk";
-	@Deprecated
-	private static final String STATE_FAIL = "isFail";
+	private static final long serialVersionUID = -6086130186405306902L;
 	
 	public Kv() {
 	}
@@ -44,68 +41,6 @@ public class Kv extends HashMap {
 	
 	public static Kv create() {
 		return new Kv();
-	}
-	
-	@Deprecated
-	public static Kv ok() {
-		return new Kv().setOk();
-	}
-	
-	@Deprecated
-	public static Kv ok(Object key, Object value) {
-		return ok().set(key, value);
-	}
-	
-	@Deprecated
-	public static Kv fail() {
-		return new Kv().setFail();
-	}
-	
-	@Deprecated
-	public static Kv fail(Object key, Object value) {
-		return fail().set(key, value);
-	}
-	
-	@Deprecated
-	public Kv setOk() {
-		super.put(STATE_OK, Boolean.TRUE);
-		super.put(STATE_FAIL, Boolean.FALSE);
-		return this;
-	}
-	
-	@Deprecated
-	public Kv setFail() {
-		super.put(STATE_FAIL, Boolean.TRUE);
-		super.put(STATE_OK, Boolean.FALSE);
-		return this;
-	}
-	
-	@Deprecated
-	public boolean isOk() {
-		Boolean isOk = (Boolean)get(STATE_OK);
-		if (isOk != null) {
-			return isOk;
-		}
-		Boolean isFail = (Boolean)get(STATE_FAIL);
-		if (isFail != null) {
-			return !isFail;
-		}
-		
-		throw new IllegalStateException("调用 isOk() 之前，必须先调用 ok()、fail() 或者 setOk()、setFail() 方法");
-	}
-	
-	@Deprecated
-	public boolean isFail() {
-		Boolean isFail = (Boolean)get(STATE_FAIL);
-		if (isFail != null) {
-			return isFail;
-		}
-		Boolean isOk = (Boolean)get(STATE_OK);
-		if (isOk != null) {
-			return !isOk;
-		}
-		
-		throw new IllegalStateException("调用 isFail() 之前，必须先调用 ok()、fail() 或者 setOk()、setFail() 方法");
 	}
 	
 	public Kv set(Object key, Object value) {
@@ -161,6 +96,16 @@ public class Kv extends HashMap {
 		return n != null ? n.longValue() : null;
 	}
 	
+	public Double getDouble(Object key) {
+		Number n = (Number)get(key);
+		return n != null ? n.doubleValue() : null;
+	}
+	
+	public Float getFloat(Object key) {
+		Number n = (Number)get(key);
+		return n != null ? n.floatValue() : null;
+	}
+	
 	public Number getNumber(Object key) {
 		return (Number)get(key);
 	}
@@ -205,6 +150,24 @@ public class Kv extends HashMap {
 	
 	public boolean equals(Object kv) {
 		return kv instanceof Kv && super.equals(kv);
+	}
+	
+	public Kv keep(String... keys) {
+		if (keys != null && keys.length > 0) {
+			Kv newKv = Kv.create();
+			for (String k : keys) {
+				if (containsKey(k)) {	// 避免将并不存在的变量存为 null
+					newKv.put(k, get(k));
+				}
+			}
+			
+			clear();
+			putAll(newKv);
+		} else {
+			clear();
+		}
+		
+		return this;
 	}
 }
 

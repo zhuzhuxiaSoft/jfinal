@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,14 @@ public class LogManager {
 	public void setDefaultLogFactory(ILogFactory defaultLogFactory) {
 		Log.setDefaultLogFactory(defaultLogFactory);
 		com.jfinal.kit.LogKit.synchronizeLog();
+	}
+	
+	/**
+	 * 切换到 slf4j 日志框架，需要引入 slf4j 相关依赖
+	 * 切换过去以后的用法参考 slf4j 文档
+	 */
+	public void setToSlf4jLogFactory() {
+		setDefaultLogFactory(new Slf4jLogFactory());
 	}
 }
 

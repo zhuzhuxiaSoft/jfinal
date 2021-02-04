@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,13 @@
  * limitations under the License.
  */
 
-package com.jfinal.plugin.auth;
+package com.jfinal.log;
 
-public class SessionKit {
-	
-	public ISession getSession(String accessToken, boolean create) {
-		return null;
-	}
-	
-	public ISession getSession(String accessToken) {
-		return getSession(accessToken, true);
-	}
-	
-	public void removeSession(String accessToken) {
-		
-	}
+/**
+ * 可变参数最后一个元素为 Throwable 类型时封装为 LogInfo
+ */
+public class LogInfo {
+	public String message;
+	public Throwable throwable;
 }
+

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package com.jfinal.template.stat.ast;
 
 import com.jfinal.template.Env;
-import com.jfinal.template.expr.ast.Assign;
 import com.jfinal.template.expr.ast.Expr;
 import com.jfinal.template.expr.ast.ExprList;
 import com.jfinal.template.io.Writer;
@@ -41,11 +40,13 @@ public class SetLocal  extends Stat {
 			throw new ParseException("The parameter of #setLocal directive can not be blank", location);
 		}
 		
+		/* 放开对表达式类型的限定
 		for (Expr expr : exprList.getExprArray()) {
-			if ( !(expr instanceof Assign) ) {
+			if ( !(expr instanceof Assign || expr instanceof IncDec) ) {
 				throw new ParseException("#setLocal directive only supports assignment expressions", location);
 			}
-		}
+		}*/
+		
 		this.expr = exprList.getActualExpr();
 	}
 	

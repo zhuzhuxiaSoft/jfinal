@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,29 @@ public class MethodInfo {
 			ret.append(paraTypes[i].getName());
 		}
 		return ret.append(")").toString();
+	}
+	
+	// --------- 以下代码仅用于支持 NullMethodInfo
+	
+	/**
+	 * 仅供 NullMethodInfo 继承使用
+	 */
+	protected MethodInfo() {
+		this.key = null;
+		this.clazz = null;
+		this.method = null;
+		this.isVarArgs = false;
+		this.paraTypes = null;
+	}
+	
+	/**
+	 * 仅仅 NullMethodInfo 会覆盖此方法并返回 false
+	 *
+	 * 1：MethodKit.getMethod(...) 消除 instanceof 判断
+	 * 2：Method.exec(...) 消除 null 值判断
+	 */
+	public boolean notNull() {
+		return true;
 	}
 }
 

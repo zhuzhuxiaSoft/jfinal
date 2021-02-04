@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package com.jfinal.template.ext.directive;
 
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import com.jfinal.template.Directive;
 import com.jfinal.template.Env;
@@ -28,6 +29,8 @@ import com.jfinal.template.stat.Scope;
 
 /**
  * #number 数字格式化输出指令
+ * 
+ * 优化时要注意 DecimalFormat 并非线程安全
  * 
  * 两种用法：
  * 1：#number(n) 用默认 pattern 输出变量中的值
@@ -53,10 +56,9 @@ public class NumberDirective extends Directive {
 	
 	private Expr valueExpr;
 	private Expr patternExpr;
-	private int paraNum;
 	
 	public void setExprList(ExprList exprList) {
-		this.paraNum = exprList.length();
+		int paraNum = exprList.length();
 		if (paraNum == 0) {
 			throw new ParseException("The parameter of #number directive can not be blank", location);
 		}
@@ -64,13 +66,8 @@ public class NumberDirective extends Directive {
 			throw new ParseException("Wrong number parameter of #number directive, two parameters allowed at most", location);
 		}
 		
-		if (paraNum == 1) {
-			this.valueExpr = exprList.getExpr(0);
-			this.patternExpr = null;
-		} else if (paraNum == 2) {
-			this.valueExpr = exprList.getExpr(0);
-			this.patternExpr = exprList.getExpr(1);
-		}
+		valueExpr = exprList.getExpr(0);
+		patternExpr = (paraNum == 1 ? null : exprList.getExpr(1));
 	}
 	
 	public void exec(Env env, Scope scope, Writer writer) {
@@ -79,25 +76,32 @@ public class NumberDirective extends Directive {
 			return ;
 		}
 		
-		if (paraNum == 1) {
-			outputWithoutPattern(writer, value);
-		} else if (paraNum == 2) {
-			outputWithPattern(scope, writer, value);
+		RoundingMode roundingMode = env.getEngineConfig().getRoundingMode();
+		if (patternExpr == null) {
+			outputWithoutPattern(value, roundingMode, writer);
+		} else {
+			outputWithPattern(value, roundingMode, scope, writer);
 		}
 	}
 	
-	private void outputWithoutPattern(Writer writer, Object value) {	
-		String ret = new DecimalFormat().format(value);
+	private void outputWithoutPattern(Object value, RoundingMode roundingMode, Writer writer) {
+		DecimalFormat df = new DecimalFormat();
+		df.setRoundingMode(roundingMode);
+		
+		String ret = df.format(value);
 		write(writer, ret);
 	}
 	
-	private void outputWithPattern(Scope scope, Writer writer, Object value) {
+	private void outputWithPattern(Object value, RoundingMode roundingMode, Scope scope, Writer writer) {
 		Object pattern = patternExpr.eval(scope);
 		if ( !(pattern instanceof String) ) {
 			throw new TemplateException("The sencond parameter pattern of #number directive must be String", location);
 		}
 		
-		String ret = new DecimalFormat((String)pattern).format(value);
+		DecimalFormat df = new DecimalFormat((String)pattern);
+		df.setRoundingMode(roundingMode);
+		
+		String ret = df.format(value);
 		write(writer, ret);
 	}
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@ package com.jfinal.template.io;
 public class WriterBuffer {
 	
 	private static final int MIN_BUFFER_SIZE = 64;					// 缓冲区最小 64 字节
-	private static final int MAX_BUFFER_SIZE = 1024 * 1024 * 10;		// 缓冲区最大 10M 字节
+	private static final int MAX_BUFFER_SIZE = 1024 * 1024 * 2;		// 缓冲区最大 2M 字节
 	
-	private int bufferSize = 2048;									// 缓冲区大小
+	private int bufferSize = 1024;									// 缓冲区大小
+	private int reentrantBufferSize = 128;							// 可重入缓冲区大小
 	
 	private EncoderFactory encoderFactory = new EncoderFactory();
 	
@@ -47,15 +48,27 @@ public class WriterBuffer {
 	};
 	
 	public ByteWriter getByteWriter(java.io.OutputStream outputStream) {
-		return byteWriters.get().init(outputStream);
+		ByteWriter ret = byteWriters.get();
+		if (ret.isInUse()) {
+			ret = new ByteWriter(encoderFactory.getEncoder(), reentrantBufferSize);
+		}
+		return ret.init(outputStream);
 	}
 	
 	public CharWriter getCharWriter(java.io.Writer writer) {
-		return charWriters.get().init(writer);
+		CharWriter ret = charWriters.get();
+		if (ret.isInUse()) {
+			ret = new CharWriter(reentrantBufferSize);
+		}
+		return ret.init(writer);
 	}
 	
 	public FastStringWriter getFastStringWriter() {
-		return fastStringWriters.get();
+		FastStringWriter ret = fastStringWriters.get();
+		if (ret.isInUse()) {
+			ret = new FastStringWriter();
+		}
+		return ret.init();
 	}
 	
 	public void setBufferSize(int bufferSize) {
@@ -63,6 +76,14 @@ public class WriterBuffer {
 			throw new IllegalArgumentException("bufferSize must between " + (MIN_BUFFER_SIZE-1) + " and " + (MAX_BUFFER_SIZE+1));
 		}
 		this.bufferSize = bufferSize;
+	}
+	
+	public void setReentrantBufferSize(int reentrantBufferSize) {
+		int min = 64, max = 2048;
+		if (reentrantBufferSize < min || reentrantBufferSize > max) {
+			throw new IllegalArgumentException("reentrantBufferSize must between " + (min-1) + " and " + (max+1));
+		}
+		this.reentrantBufferSize = reentrantBufferSize;
 	}
 	
 	public void setEncoderFactory(EncoderFactory encoderFactory) {

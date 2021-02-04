@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,10 @@ public abstract class CPI {
 	public static <T> List<T> query(String configName, Connection conn, String sql, Object... paras) throws SQLException {
 		return Db.query(DbKit.getConfig(configName), conn, sql, paras);
 	}
+
+	public static <T> List<T> query(Config config, Connection conn, String sql, Object... paras) throws SQLException {
+		return Db.query(config, conn, sql, paras);
+	}
 	
 	/**
 	 * Return the columns map of the record
@@ -106,6 +110,10 @@ public abstract class CPI {
 	
 	public static void setTablePrimaryKey(Table table, String primaryKey) {
 		table.setPrimaryKey(primaryKey);
+	}
+	
+	public static void addModelToConfigMapping(Class<? extends Model> modelClass, Config config) {
+		DbKit.addModelToConfigMapping(modelClass, config);
 	}
 }
 

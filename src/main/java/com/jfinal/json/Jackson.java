@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 
 package com.jfinal.json;
 
-import java.text.SimpleDateFormat;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.jfinal.kit.TimeKit;
 
 /**
  * Json 转换 jackson 实现.
@@ -49,9 +50,13 @@ public class Jackson extends Json {
 	}
 	
 	// https://gitee.com/jfinal/jfinal-weixin/issues/I875U
+	@SuppressWarnings("deprecation")
 	protected void config() {
 		objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
 		objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);
+		
+		// 没有 getter 方法时不抛异常
+		objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
 	}
 	
 	public static void setDefaultGenerateNullValue(boolean defaultGenerateNullValue) {
@@ -79,7 +84,7 @@ public class Jackson extends Json {
 			// 优先使用对象级的属性 datePattern, 然后才是全局性的 defaultDatePattern
 			String dp = datePattern != null ? datePattern : getDefaultDatePattern();
 			if (dp != null) {
-				objectMapper.setDateFormat(new SimpleDateFormat(dp));
+				objectMapper.setDateFormat(TimeKit.getSimpleDateFormat(dp));
 			}
 			
 			// 优先使用对象属性 generateNullValue，决定转换 json时是否生成 null value

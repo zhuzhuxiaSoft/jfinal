@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,17 @@
 package com.jfinal.template;
 
 import java.lang.reflect.Method;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
 import com.jfinal.kit.StrKit;
+import com.jfinal.template.expr.ast.Arith;
 import com.jfinal.template.expr.ast.ExprList;
 import com.jfinal.template.expr.ast.SharedMethodKit;
 import com.jfinal.template.ext.directive.*;
@@ -34,6 +39,7 @@ import com.jfinal.template.source.FileSourceFactory;
 import com.jfinal.template.source.ISource;
 import com.jfinal.template.source.ISourceFactory;
 import com.jfinal.template.source.StringSource;
+import com.jfinal.template.stat.Compressor;
 import com.jfinal.template.stat.Location;
 import com.jfinal.template.stat.OutputDirectiveFactory;
 import com.jfinal.template.stat.Parser;
@@ -49,6 +55,8 @@ public class EngineConfig {
 	
 	WriterBuffer writerBuffer = new WriterBuffer();
 	
+	Compressor compressor = null;
+	
 	private Map<String, Define> sharedFunctionMap = createSharedFunctionMap();		// new HashMap<String, Define>(512, 0.25F);
 	private List<ISource> sharedFunctionSourceList = new ArrayList<ISource>();		// for devMode only
 	
@@ -59,21 +67,32 @@ public class EngineConfig {
 	private Map<String, Class<? extends Directive>> directiveMap = new HashMap<String, Class<? extends Directive>>(64, 0.5F);
 	private SharedMethodKit sharedMethodKit = new SharedMethodKit();
 	
+	// 保留指令所在行空白字符的指令
+	private Set<String> keepLineBlankDirectives = new HashSet<>();
+	
 	private boolean devMode = false;
 	private boolean reloadModifiedSharedFunctionInDevMode = true;
 	private String baseTemplatePath = null;
 	private String encoding = DEFAULT_ENCODING;
 	private String datePattern = "yyyy-MM-dd HH:mm";
 	
+	// 浮点数输出与运算时使用的舍入模式，默认值为 "四舍五入"
+	private RoundingMode roundingMode = RoundingMode.HALF_UP;
+	
 	public EngineConfig() {
+		// 内置指令 #() 与 #include() 需要配置，保留指令所在行前后空白字符以及行尾换行字符 '\n'
+		setKeepLineBlank("output", true);
+		setKeepLineBlank("include", true);
+		
 		// Add official directive of Template Engine
-		addDirective("render", RenderDirective.class);
-		addDirective("date", DateDirective.class);
-		addDirective("escape", EscapeDirective.class);
-		addDirective("string", StringDirective.class);
-		addDirective("random", RandomDirective.class);
-		addDirective("number", NumberDirective.class);
-		addDirective("call", CallDirective.class);
+		addDirective("render", RenderDirective.class, true);
+		addDirective("date", DateDirective.class, true);
+		addDirective("escape", EscapeDirective.class, true);
+		addDirective("random", RandomDirective.class, true);
+		addDirective("number", NumberDirective.class, true);
+		
+		addDirective("call", CallDirective.class, false);
+		addDirective("string", StringDirective.class, false);
 		
 		// Add official shared method of Template Engine
 		addSharedMethod(new SharedMethodLib());
@@ -209,8 +228,14 @@ public class EngineConfig {
 		sharedObjectMap.put(name, object);
 	}
 	
-	Map<String, Object> getSharedObjectMap() {
+	public Map<String, Object> getSharedObjectMap() {
 		return sharedObjectMap;
+	}
+	
+	public synchronized void removeSharedObject(String name) {
+		if (sharedObjectMap != null) {
+			sharedObjectMap.remove(name);
+		}
 	}
 	
 	/**
@@ -289,8 +314,21 @@ public class EngineConfig {
 		writerBuffer.setEncoding(encoding);		// 间接设置 EncoderFactory.encoding
 	}
 	
-	public void setWriterBufferSize(int bufferSize) {
+	public void setBufferSize(int bufferSize) {
 		writerBuffer.setBufferSize(bufferSize);
+	}
+	
+	public void setReentrantBufferSize(int reentrantBufferSize) {
+		writerBuffer.setReentrantBufferSize(reentrantBufferSize);
+	}
+	
+	/**
+	 * 配置自己的 WriterBuffer 实现，配置方法：
+	 * engine.getEngineConfig().setWriterBuffer(...);
+	 */
+	public void setWriterBuffer(WriterBuffer writerBuffer) {
+		Objects.requireNonNull(writerBuffer, "writerBuffer can not be null");
+		this.writerBuffer = writerBuffer;
 	}
 	
 	public String getEncoding() {
@@ -312,12 +350,7 @@ public class EngineConfig {
 		this.reloadModifiedSharedFunctionInDevMode = reloadModifiedSharedFunctionInDevMode;
 	}
 	
-	@Deprecated
-	public void addDirective(String directiveName, Directive directive) {
-		addDirective(directiveName, directive.getClass());
-	}
-	
-	public synchronized void addDirective(String directiveName, Class<? extends Directive> directiveClass) {
+	public synchronized void addDirective(String directiveName, Class<? extends Directive> directiveClass, boolean keepLineBlank) {
 		if (StrKit.isBlank(directiveName)) {
 			throw new IllegalArgumentException("directive name can not be blank");
 		}
@@ -327,7 +360,15 @@ public class EngineConfig {
 		if (directiveMap.containsKey(directiveName)) {
 			throw new IllegalArgumentException("directive already exists : " + directiveName);
 		}
+		
 		directiveMap.put(directiveName, directiveClass);
+		if (keepLineBlank) {
+			keepLineBlankDirectives.add(directiveName);
+		}
+	}
+	
+	public void addDirective(String directiveName, Class<? extends Directive> directiveClass) {
+		addDirective(directiveName, directiveClass, false);
 	}
 	
 	public Class<? extends Directive> getDirective(String directiveName) {
@@ -336,6 +377,19 @@ public class EngineConfig {
 	
 	public void removeDirective(String directiveName) {
 		directiveMap.remove(directiveName);
+		keepLineBlankDirectives.remove(directiveName);
+	}
+	
+	public void setKeepLineBlank(String directiveName, boolean keepLineBlank) {
+		if (keepLineBlank) {
+			keepLineBlankDirectives.add(directiveName);
+		} else {
+			keepLineBlankDirectives.remove(directiveName);
+		}
+	}
+	
+	public Set<String> getKeepLineBlankDirectives() {
+		return keepLineBlankDirectives;
 	}
 	
 	/**
@@ -382,6 +436,26 @@ public class EngineConfig {
 	
 	public SharedMethodKit getSharedMethodKit() {
 		return sharedMethodKit;
+	}
+	
+	public void setCompressor(Compressor compressor) {
+		this.compressor = compressor;
+	}
+	
+	public Compressor getCompressor() {
+		return compressor;
+	}
+	
+	/**
+	 * 设置 #number 指令与 Arith 中浮点数的舍入规则，默认为 RoundingMode.HALF_UP "四舍五入"
+	 */
+	public void setRoundingMode(RoundingMode roundingMode) {
+		this.roundingMode = roundingMode;
+		Arith.setBigDecimalDivideRoundingMode(roundingMode);
+	}
+	
+	public RoundingMode getRoundingMode() {
+		return roundingMode;
 	}
 }
 

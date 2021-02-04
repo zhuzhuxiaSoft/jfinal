@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2011-2019, James Zhan 詹波 (jfinal@126.com).
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,10 @@ import com.jfinal.json.Json;
  *    Okv para = Okv.by("id", 123);
  *    User user = user.findFirst(getSqlPara("find", para));
  */
-@SuppressWarnings({"serial", "rawtypes", "unchecked"})
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class Okv extends LinkedHashMap {
+	
+	private static final long serialVersionUID = 485147547719011382L;
 	
 	public Okv() {
 	}
@@ -97,6 +99,16 @@ public class Okv extends LinkedHashMap {
 		return n != null ? n.longValue() : null;
 	}
 	
+	public Double getDouble(Object key) {
+		Number n = (Number)get(key);
+		return n != null ? n.doubleValue() : null;
+	}
+	
+	public Float getFloat(Object key) {
+		Number n = (Number)get(key);
+		return n != null ? n.floatValue() : null;
+	}
+	
 	public Number getNumber(Object key) {
 		return (Number)get(key);
 	}
@@ -141,6 +153,24 @@ public class Okv extends LinkedHashMap {
 	
 	public boolean equals(Object okv) {
 		return okv instanceof Okv && super.equals(okv);
+	}
+	
+	public Okv keep(String... keys) {
+		if (keys != null && keys.length > 0) {
+			Okv newOkv = Okv.create();
+			for (String k : keys) {
+				if (containsKey(k)) {	// 避免将并不存在的变量存为 null
+					newOkv.put(k, get(k));
+				}
+			}
+			
+			clear();
+			putAll(newOkv);
+		} else {
+			clear();
+		}
+		
+		return this;
 	}
 }
 

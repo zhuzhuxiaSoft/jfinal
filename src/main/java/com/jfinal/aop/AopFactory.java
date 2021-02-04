@@ -1,8 +1,28 @@
+/**
+ * Copyright (c) 2011-2021, James Zhan 詹波 (jfinal@126.com).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.jfinal.aop;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import com.jfinal.core.Controller;
+import com.jfinal.plugin.activerecord.Model;
+import com.jfinal.proxy.Proxy;
+import com.jfinal.validate.Validator;
 
 /**
  * AopFactory 是工具类 Aop 功能的具体实现，详细用法见 Aop
@@ -12,33 +32,27 @@ public class AopFactory {
 	// 单例缓存
 	protected ConcurrentHashMap<Class<?>, Object> singletonCache = new ConcurrentHashMap<Class<?>, Object>();
 	
+	// 支持循环注入
+	protected ThreadLocal<HashMap<Class<?>, Object>> singletonTl = ThreadLocal.withInitial(() -> new HashMap<>());
+	protected ThreadLocal<HashMap<Class<?>, Object>> prototypeTl = ThreadLocal.withInitial(() -> new HashMap<>());
+	
 	// 父类到子类、接口到实现类之间的映射关系
 	protected HashMap<Class<?>, Class<?>> mapping = null;
 	
-	protected static int MAX_INJECT_DEPTH = 7;			// 最大注入深度
-	
 	protected boolean singleton = true;					// 默认单例
-	protected boolean enhance = true;					// 默认增强
-	protected int injectDepth = 3;						// 默认注入深度
+	
+	protected boolean injectSuperClass = false;			// 默认不对超类进行注入
 	
 	public <T> T get(Class<T> targetClass) {
 		try {
-			return doGet(targetClass, injectDepth);
-		} catch (ReflectiveOperationException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	public <T> T get(Class<T> targetClass, int injectDepth) {
-		try {
-			return doGet(targetClass, injectDepth);
+			return doGet(targetClass);
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
 		}
 	}
 	
 	@SuppressWarnings("unchecked")
-	protected <T> T doGet(Class<T> targetClass, int injectDepth) throws ReflectiveOperationException {
+	protected <T> T doGet(Class<T> targetClass) throws ReflectiveOperationException {
 		// Aop.get(obj.getClass()) 可以用 Aop.inject(obj)，所以注掉下一行代码
 		// targetClass = (Class<T>)getUsefulClass(targetClass);
 		
@@ -47,40 +61,76 @@ public class AopFactory {
 		Singleton si = targetClass.getAnnotation(Singleton.class);
 		boolean singleton = (si != null ? si.value() : this.singleton);
 		
-		Object ret;
-		if ( ! singleton ) {
-			ret = createObject(targetClass);
-			doInject(targetClass, ret, injectDepth);
+		if (singleton) {
+			return doGetSingleton(targetClass);
+		} else {
+			return doGetPrototype(targetClass);
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	protected <T> T doGetSingleton(Class<T> targetClass) throws ReflectiveOperationException {
+		Object ret = singletonCache.get(targetClass);
+		if (ret != null) {
 			return (T)ret;
 		}
 		
-		ret = singletonCache.get(targetClass);
-		if (ret == null) {
-			synchronized (this) {
-				ret = singletonCache.get(targetClass);
-				if (ret == null) {
-					ret = createObject(targetClass);
-					doInject(targetClass, ret, injectDepth);
-					singletonCache.put(targetClass, ret);
-				}
+		HashMap<Class<?>, Object> map = singletonTl.get();
+		int size = map.size();
+		if (size > 0) {
+			ret = map.get(targetClass);
+			if (ret != null) {		// 发现循环注入
+				return (T)ret;
 			}
 		}
 		
-		return (T)ret;
+		synchronized (this) {
+			try {
+				ret = singletonCache.get(targetClass);
+				if (ret == null) {
+					ret = createObject(targetClass);
+					map.put(targetClass, ret);
+					doInject(targetClass, ret);
+					singletonCache.put(targetClass, ret);
+				}
+				return (T)ret;
+			} finally {
+				if (size == 0) {		// 仅顶层才需要 remove()
+					singletonTl.remove();
+				}
+			}
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	protected <T> T doGetPrototype(Class<T> targetClass) throws ReflectiveOperationException {
+		Object ret;
+		
+		HashMap<Class<?>, Object> map = prototypeTl.get();
+		int size = map.size();
+		if (size > 0) {
+			ret = map.get(targetClass);
+			if (ret != null) {		// 发现循环注入
+				// return (T)ret;
+				return (T)createObject(targetClass);
+			}
+		}
+		
+		try {
+			ret = createObject(targetClass);
+			map.put(targetClass, ret);
+			doInject(targetClass, ret);
+			return (T)ret;
+		} finally {
+			if (size == 0) {		// 仅顶层才需要 clear()
+				map.clear();
+			}
+		}
 	}
 	
 	public <T> T inject(T targetObject) {
 		try {
-			doInject(targetObject.getClass(), targetObject, injectDepth);
-			return targetObject;
-		} catch (ReflectiveOperationException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	public <T> T inject(T targetObject, int injectDepth) {
-		try {
-			doInject(targetObject.getClass(), targetObject, injectDepth);
+			doInject(targetObject.getClass(), targetObject);
 			return targetObject;
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
@@ -90,59 +140,45 @@ public class AopFactory {
 	// 方法原型的参数测试过可以是：Class<? super T> targetClass, T targetObject
 	public <T> T inject(Class<T> targetClass, T targetObject) {
 		try {
-			doInject(targetClass, targetObject, injectDepth);
+			doInject(targetClass, targetObject);
 			return targetObject;
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
 		}
 	}
 	
-	public <T> T inject(Class<T> targetClass, T targetObject, int injectDepth) {
-		try {
-			doInject(targetClass, targetObject, injectDepth);
-			return targetObject;
-		} catch (ReflectiveOperationException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	protected void doInject(Class<?> targetClass, Object targetObject, int injectDepth) throws ReflectiveOperationException {
-		if ((injectDepth--) <= 0) {
-			return ;
-		}
-		
+	protected void doInject(Class<?> targetClass, Object targetObject) throws ReflectiveOperationException {
 		targetClass = getUsefulClass(targetClass);
 		Field[] fields = targetClass.getDeclaredFields();
-		if (fields.length == 0) {
-			return ;
+		if (fields.length != 0) {
+			for (Field field : fields) {
+				Inject inject = field.getAnnotation(Inject.class);
+				if (inject == null) {
+					continue ;
+				}
+				
+				Class<?> fieldInjectedClass = inject.value();
+				if (fieldInjectedClass == Void.class) {
+					fieldInjectedClass = field.getType();
+				}
+				
+				Object fieldInjectedObject = doGet(fieldInjectedClass);
+				field.setAccessible(true);
+				field.set(targetObject, fieldInjectedObject);
+			}
 		}
 		
-		for (Field field : fields) {
-			Inject inject = field.getAnnotation(Inject.class);
-			if (inject == null) {
-				continue ;
+		// 是否对超类进行注入
+		if (injectSuperClass) {
+			Class<?> c = targetClass.getSuperclass();
+			if (c != Controller.class && c != Object.class && c != Validator.class && c != Model.class && c != null) {
+				doInject(c, targetObject);
 			}
-			
-			Class<?> fieldInjectedClass = inject.value();
-			if (fieldInjectedClass == Void.class) {
-				fieldInjectedClass = field.getType();
-			}
-			
-			Object fieldInjectedObject = doGet(fieldInjectedClass, injectDepth);
-			field.setAccessible(true);
-			field.set(targetObject, fieldInjectedObject);
 		}
 	}
 	
-	/**
-	 * 由于上层已经处理过 singleton，所以 Enhancer.enhance() 方法中不必关心 singleton
-	 */
-	@SuppressWarnings("deprecation")
 	protected Object createObject(Class<?> targetClass) throws ReflectiveOperationException {
-		Enhance en = targetClass.getAnnotation(Enhance.class);
-		boolean enhance = (en != null ? en.value() : this.enhance);
-		
-		return enhance ? com.jfinal.aop.Enhancer.enhance(targetClass) : targetClass.newInstance();
+		return Proxy.get(targetClass);
 	}
 	
 	/**
@@ -158,18 +194,6 @@ public class AopFactory {
 	}
 	
 	/**
-	 * 设置被注入的对象是否被增强，可使用 @Enhace(boolean) 覆盖此默认值
-	 * 
-	 * 由于下一版本的 jfinal 3.6 将根据目标类中是否配置了拦截器来决定是否增强，
-	 * 所以该 setEnhance 方法仅仅是一个过渡功能，不建议使用
-	 */
-	@Deprecated
-	public AopFactory setEnhance(boolean enhance) {
-		this.enhance = enhance;
-		return this;
-	}
-	
-	/**
 	 * 设置被注入的对象是否为单例，可使用 @Singleton(boolean) 覆盖此默认值 
 	 */
 	public AopFactory setSingleton(boolean singleton) {
@@ -182,25 +206,21 @@ public class AopFactory {
 	}
 	
 	/**
-	 * 设置注入深度，避免被注入类在具有循环依赖时造成无限循环
+	 * 设置是否对超类进行注入
 	 */
-	public AopFactory setInjectDepth(int injectDepth) {
-		if (injectDepth <= 0) {
-			throw new IllegalArgumentException("注入层数必须大于 0");
-		}
-		if (injectDepth > MAX_INJECT_DEPTH) {
-			throw new IllegalArgumentException("为保障性能，注入层数不能超过 " + MAX_INJECT_DEPTH);
-		}
-		
-		this.injectDepth = injectDepth;
+	public AopFactory setInjectSuperClass(boolean injectSuperClass) {
+		this.injectSuperClass = injectSuperClass;
 		return this;
 	}
 	
-	public int getInjectDepth() {
-		return injectDepth;
+	public boolean isInjectSuperClass() {
+		return injectSuperClass;
 	}
 	
-	public AopFactory addSingletonObject(Object singletonObject) {
+	public AopFactory addSingletonObject(Class<?> type, Object singletonObject) {
+		if (type == null) {
+			throw new IllegalArgumentException("type can not be null");
+		}
 		if (singletonObject == null) {
 			throw new IllegalArgumentException("singletonObject can not be null");
 		}
@@ -208,12 +228,21 @@ public class AopFactory {
 			throw new IllegalArgumentException("singletonObject can not be Class type");
 		}
 		
-		Class<?> type = getUsefulClass(singletonObject.getClass());
+		if ( ! (type.isAssignableFrom(singletonObject.getClass())) ) {
+			throw new IllegalArgumentException(singletonObject.getClass().getName() + " can not cast to " + type.getName());
+		}
+		
+		// Class<?> type = getUsefulClass(singletonObject.getClass());
 		if (singletonCache.putIfAbsent(type, singletonObject) != null) {
 			throw new RuntimeException("Singleton object already exists for type : " + type.getName());
 		}
 		
 		return this;
+	}
+	
+	public AopFactory addSingletonObject(Object singletonObject) {
+		Class<?> type = getUsefulClass(singletonObject.getClass());
+		return addSingletonObject(type, singletonObject);
 	}
 	
 	public synchronized <T> AopFactory addMapping(Class<T> from, Class<? extends T> to) {
@@ -259,18 +288,6 @@ public class AopFactory {
 		}
 	}
 }
-
-
-/* 未来考虑不再支持对象的 Aop，只支持 Class 的 Aop
-public <T> T get(T targetObject) {
-	try {
-		inject(injectDepth, targetObject.getClass(), targetObject);
-		return targetObject;
-	}
-	catch (Exception e) {
-		throw new RuntimeException(e);
-	}
-}*/
 
 
 
